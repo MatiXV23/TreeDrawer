@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TreeDrawer</title>
+  <meta name="description" content="Armá árboles arrastrando y conectando nodos, y descubrí si son AG, AB, ABB o AVL.">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true">
+        <line x1="16" y1="8" x2="8" y2="22" /><line x1="16" y1="8" x2="24" y2="22" />
+        <circle cx="16" cy="8" r="5" /><circle cx="8" cy="23" r="5" /><circle cx="24" cy="23" r="5" />
+      </svg>
+      <span>TreeDrawer</span>
+    </div>
+
+    <div class="mode-tabs" role="tablist" aria-label="Modo">
+      <button type="button" role="tab" data-mode="draw" aria-selected="true">Dibujar</button>
+      <button type="button" role="tab" data-mode="code" aria-selected="false">Programar</button>
+    </div>
+
+    <nav class="toolbar" aria-label="Herramientas">
+      <div class="group">
+        <button id="btnAdd" title="Nuevo nodo (N)">＋ Nodo</button>
+        <button id="btnLayout" title="Ordenar automáticamente (L)">Ordenar</button>
+        <button id="btnFit" title="Centrar la vista (F)">Centrar</button>
+      </div>
+      <div class="group">
+        <button id="btnUndo" class="icon" title="Deshacer (Ctrl/⌘+Z)" aria-label="Deshacer">↶</button>
+        <button id="btnRedo" class="icon" title="Rehacer (Ctrl/⌘+Shift+Z)" aria-label="Rehacer">↷</button>
+      </div>
+      <div class="group">
+        <select id="selExample" aria-label="Cargar ejemplo">
+          <option value="">Ejemplos…</option>
+        </select>
+        <button id="btnImport" title="Importar JSON">Importar</button>
+        <button id="btnExport" title="Exportar JSON">Exportar</button>
+        <button id="btnClear" class="danger" title="Borrar todo">Limpiar</button>
+      </div>
+      <div class="group">
+        <label class="toggle" title="Mostrar altura y factor de balance de cada nodo">
+          <input type="checkbox" id="chkMetrics"> Altura / FB
+        </label>
+        <label class="toggle" title="Mostrar si cada hijo es izquierdo o derecho">
+          <input type="checkbox" id="chkSides"> Lados I/D
+        </label>
+        <button id="btnTheme" class="icon" title="Cambiar tema" aria-label="Cambiar tema">◐</button>
+      </div>
+    </nav>
+    <input type="file" id="fileInput" accept="application/json,.json" hidden>
+  </header>
+
+  <main class="layout">
+    <section class="code-pane" id="codePane" aria-label="Programar">
+      <div class="code-head">
+        <select id="codeExample" aria-label="Ejercicio"></select>
+        <button type="button" id="btnGuide" title="Clases y métodos a implementar, con su estado">Estructura</button>
+        <button type="button" id="btnExample" title="Ver una solución correcta (no modifica tu código)">Ver ejemplo correcto</button>
+      </div>
+      <div id="codeEditor" class="code-editor"></div>
+      <div id="codeStatus" class="code-status" role="status"></div>
+      <div class="tree-row" id="treeRow">
+        <label for="treeClass"><code>arbol</code> es un</label>
+        <select id="treeClass" aria-label="Clase de arbol"></select>
+      </div>
+      <div class="call-row">
+        <label for="callInput">Ejecutar</label>
+        <input id="callInput" class="call-input" type="text" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="arbol.altura()">
+      </div>
+      <div class="fn-list" id="fnList" aria-label="Funciones definidas"></div>
+      <div class="run-controls">
+        <button id="btnRun" class="primary" title="Ejecutar animado (Enter en la línea de ejecución)">▶ Ejecutar</button>
+        <button id="btnStep" title="Avanzar un paso">Paso</button>
+        <button id="btnEnd" title="Ejecutar hasta el final (o hasta un breakpoint)">Hasta el final</button>
+        <button id="btnStop" title="Detener">⏹ Detener</button>
+        <label class="speed" title="Velocidad de la animación">
+          <span>Velocidad</span>
+          <input type="range" id="speed" min="0" max="100" value="70">
+        </label>
+      </div>
+      <div class="run-info" id="runInfo" aria-live="polite"></div>
+      <div class="console-wrap">
+        <div class="console-head">Consola</div>
+        <div id="console" class="console"></div>
+      </div>
+    </section>
+
+    <section class="canvas-wrap" id="canvasWrap">
+      <svg id="canvas" role="application" aria-label="Lienzo del árbol">
+        <defs>
+          <pattern id="gridPattern" width="24" height="24" patternUnits="userSpaceOnUse">
+            <circle cx="1" cy="1" r="1" class="grid-dot" />
+          </pattern>
+          <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,1 L9,5 L0,9 z" class="arrow-head" />
+          </marker>
+          <marker id="arrowSel" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,1 L9,5 L0,9 z" class="arrow-head sel" />
+          </marker>
+        </defs>
+        <rect class="grid-bg" width="100%" height="100%" fill="url(#gridPattern)" />
+        <g id="world">
+          <g id="edges"></g>
+          <g id="ghost"></g>
+          <g id="nodes"></g>
+        </g>
+      </svg>
+
+      <input id="nodeEditor" class="node-editor" type="text" maxlength="12" autocomplete="off" spellcheck="false" hidden>
+
+      <div class="empty-state" id="emptyState">
+        <p class="big">Doble clic para crear un nodo</p>
+        <p>Arrastrá desde el punto inferior de un nodo hacia otro para conectarlos,<br>o soltalo en un espacio vacío para crear un hijo.</p>
+        <p>También podés cargar un <strong>ejemplo</strong> desde la barra superior.</p>
+      </div>
+
+      <div id="kindChip" class="kind-chip" title="Clasificación del árbol"></div>
+      <aside id="stackCard" class="stack-card" hidden aria-label="Pila de llamadas"></aside>
+
+      <div class="zoom-controls">
+        <button id="btnZoomIn" class="icon" aria-label="Acercar">＋</button>
+        <button id="btnZoomOut" class="icon" aria-label="Alejar">－</button>
+      </div>
+    </section>
+
+    <aside class="panel" id="panel">
+      <section id="result" class="card result"></section>
+      <section id="selection" class="card"></section>
+      <section id="stats" class="card"></section>
+
+      <section class="card">
+        <h3>Insertar valor</h3>
+        <p class="muted small">Inserta respetando las reglas del ABB. «AVL» además rebalancea con rotaciones.</p>
+        <form id="insertForm" class="insert-row">
+          <input id="insertValue" type="text" maxlength="12" placeholder="Ej: 42" autocomplete="off" aria-label="Valor a insertar">
+          <button type="submit" data-mode="bst">ABB</button>
+          <button type="submit" data-mode="avl" class="primary">AVL</button>
+        </form>
+      </section>
+
+      <details class="card help">
+        <summary>Controles</summary>
+        <ul>
+          <li><b>Doble clic</b> en el lienzo: nuevo nodo.</li>
+          <li><b>Doble clic</b> en un nodo (o <kbd>Enter</kbd>): editar el valor.</li>
+          <li><b>Arrastrar</b> un nodo: moverlo. Si queda a la izquierda de su padre es hijo izquierdo; a la derecha, derecho.</li>
+          <li><b>Arrastrar desde el punto inferior</b> (o <kbd>Shift</kbd>+arrastrar): conectar con otro nodo, o soltar en vacío para crear un hijo.</li>
+          <li><b>Arrastrar el fondo</b>: mover la vista. <b>Rueda</b>: zoom.</li>
+          <li><kbd>Supr</kbd>/<kbd>⌫</kbd>: borrar la selección.</li>
+          <li><kbd>L</kbd> ordenar · <kbd>F</kbd> centrar · <kbd>N</kbd> nuevo nodo · <kbd>Esc</kbd> deseleccionar.</li>
+        </ul>
+        <p class="muted small">Convenciones (como en <code>Nodo.altura</code>): una hoja tiene altura 1 y el árbol vacío, 0. FB = altura(izq) − altura(der). Los ABB no admiten claves repetidas.</p>
+      </details>
+    </aside>
+  </main>
+
+  <dialog id="guideDialog" class="guide" aria-label="Estructura y ejemplo">
+    <div class="guide-head">
+      <div class="guide-tabs" role="tablist">
+        <button type="button" role="tab" data-tab="estructura">Estructura a implementar</button>
+        <button type="button" role="tab" data-tab="ejemplo">Ejemplo correcto</button>
+      </div>
+      <button type="button" id="guideClose" class="icon" aria-label="Cerrar">✕</button>
+    </div>
+    <div class="guide-body" id="guideBody"></div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="js/analysis.js"></script>
+  <script src="js/layout.js"></script>
+  <script src="js/state.js"></script>
+  <script src="js/examples.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/lang/parser.js"></script>
+  <script src="js/lang/interpreter.js"></script>
+  <script src="js/lang/examples.js"></script>
+  <script src="js/editor.js"></script>
+  <script src="js/guide.js"></script>
+  <script src="js/runner.js"></script>
+</body>
+</html>
