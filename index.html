@@ -57,8 +57,17 @@
     <section class="code-pane" id="codePane" aria-label="Programar">
       <div class="code-head">
         <select id="codeExample" aria-label="Ejercicio"></select>
+        <div class="lang-switch" id="langSwitch" role="radiogroup" aria-label="Lenguaje">
+          <button type="button" role="radio" data-lang="js" aria-checked="true" title="JavaScript">JS</button>
+          <button type="button" role="radio" data-lang="java" aria-checked="false" title="Java">Java</button>
+        </div>
+      </div>
+      <div class="code-actions">
         <button type="button" id="btnGuide" title="Clases y métodos a implementar, con su estado">Estructura</button>
-        <button type="button" id="btnExample" title="Ver una solución correcta (no modifica tu código)">Ver ejemplo correcto</button>
+        <button type="button" id="btnExample">Ver ejemplo correcto</button>
+      </div>
+      <div class="solution-banner" id="solutionBanner" hidden>
+        <b>Ejemplo correcto</b> · solo lectura. Ejecutalo para ver cómo funciona; tu código quedó guardado.
       </div>
       <div id="codeEditor" class="code-editor"></div>
       <div id="codeStatus" class="code-status" role="status"></div>
@@ -157,12 +166,9 @@
     </aside>
   </main>
 
-  <dialog id="guideDialog" class="guide" aria-label="Estructura y ejemplo">
+  <dialog id="guideDialog" class="guide" aria-labelledby="guideTitle">
     <div class="guide-head">
-      <div class="guide-tabs" role="tablist">
-        <button type="button" role="tab" data-tab="estructura">Estructura a implementar</button>
-        <button type="button" role="tab" data-tab="ejemplo">Ejemplo correcto</button>
-      </div>
+      <h2 id="guideTitle">Estructura a implementar</h2>
       <button type="button" id="guideClose" class="icon" aria-label="Cerrar">✕</button>
     </div>
     <div class="guide-body" id="guideBody"></div>
@@ -176,6 +182,7 @@
   <script src="js/examples.js"></script>
   <script src="js/app.js"></script>
   <script src="js/lang/parser.js"></script>
+  <script src="js/lang/java-parser.js"></script>
   <script src="js/lang/interpreter.js"></script>
   <script src="js/lang/examples.js"></script>
   <script src="js/editor.js"></script>

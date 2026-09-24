@@ -22,19 +22,30 @@ const Runner = (() => {
   const selCode = $('#codeExample');
   const treeRow = $('#treeRow');
   const treeClassSel = $('#treeClass');
+  const btnExample = $('#btnExample');
+  const solutionBanner = $('#solutionBanner');
+  const langButtons = document.querySelectorAll('#langSwitch [data-lang]');
 
-  let program = null;
-  let lastGood = null;   // último código que compiló (para el estado de la estructura)
+  let lang = 'js';
+  let program = null;       // código del editor (tuyo o el ejemplo correcto)
+  let lastGood = null;      // último código del editor que compiló
   let parseErr = null;
   let parseTimer = 0;
   let exercise = null;
   let session = null;
+  let viewingSolution = false;
+  const drafts = new Map(); // «ejercicio:lenguaje» → tu código (solo en memoria)
+
+  const parser = () => LANGS[lang].parser();
+  const draftKey = () => `${exercise.id}:${lang}`;
+  const userCode = () => (viewingSolution ? drafts.get(draftKey()) ?? Exercise.starter(exercise, lang) : editor.value);
 
   // ---------- código ----------
   function parseNow() {
     clearTimeout(parseTimer);
     try {
-      program = JSParser.parseProgram(editor.value);
+      program = parser().parseProgram(editor.value);
+      program.lang = lang;
       lastGood = program;
       parseErr = null;
     } catch (err) {
@@ -49,22 +60,36 @@ const Runner = (() => {
     return !parseErr;
   }
 
-  // ---------- clase de «arbol» ----------
-  const AUTO_ORDER = {
-    AVL: ['ArbolAVL', 'ArbolBinarioBusqueda', 'ArbolBinario'],
-    EMPTY: ['ArbolAVL', 'ArbolBinarioBusqueda', 'ArbolBinario'],
-    ABB: ['ArbolBinarioBusqueda', 'ArbolBinario'],
-    AB: ['ArbolBinario'],
-  };
+  /** Programa a ejecutar: las clases incluidas del ejercicio + el código del editor. */
+  function runnableProgram() {
+    const pre = Exercise.prelude(exercise, lang);
+    if (!pre) return program;
+    const mine = new Set(program.body.filter(d => d.t === 'classdecl').map(d => d.name));
+    return { t: 'program', lang, body: [...pre.body.filter(d => !(d.t === 'classdecl' && mine.has(d.name))), ...program.body] };
+  }
 
+  // ---------- clase de «arbol» ----------
+  const ORDERED = new Set(['ArbolBinarioBusqueda', 'ArbolAVL']);
+
+  /** Clases disponibles: las incluidas por el ejercicio y las del editor. */
   function userClasses() {
-    return (lastGood?.body ?? []).filter(s => s.t === 'classdecl').map(s => s.name);
+    const own = (lastGood?.body ?? []).filter(s => s.t === 'classdecl').map(s => s.name);
+    const provided = exercise?.kind === 'classes' ? exercise.provides : [];
+    return [...new Set([...provided, ...own])];
+  }
+
+  /** Las clases de búsqueda necesitan un dibujo ordenado (ABB o AVL) o vacío. */
+  function compatible(name, kind) {
+    if (kind === 'AG') return false;
+    return !ORDERED.has(name) || ['ABB', 'AVL', 'EMPTY'].includes(kind);
   }
 
   function autoClass(kind) {
     const names = userClasses();
     if (kind === 'AG' || !names.length) return null;
-    return (AUTO_ORDER[kind] ?? []).find(n => names.includes(n)) ?? names[names.length - 1];
+    if (exercise?.cls && names.includes(exercise.cls) && compatible(exercise.cls, kind)) return exercise.cls;
+    return ['ArbolAVL', 'ArbolBinarioBusqueda', 'ArbolBinario'].find(n => names.includes(n) && compatible(n, kind))
+      ?? names.find(n => !CLASS_ORDER.includes(n)) ?? null;
   }
 
   function currentKind() {
@@ -111,6 +136,11 @@ const Runner = (() => {
   }
 
   function renderStatus() {
+    if (viewingSolution && !parseErr) {
+      statusEl.dataset.state = 'ok';
+      statusEl.textContent = 'Ejemplo correcto · solo lectura · podés ejecutarlo';
+      return;
+    }
     if (parseErr) {
       statusEl.dataset.state = 'error';
       statusEl.textContent = `Línea ${parseErr.line ?? '?'}: ${parseErr.message}`;
@@ -138,7 +168,12 @@ const Runner = (() => {
   function renderFnList() {
     const chips = [];
     const cls = TREE_STRUCTURE.find(c => c.name === resolveTreeClass());
-    if (cls) for (const m of cls.methods) chips.push({ label: `arbol.${m.sig}`, call: structureCall(m) });
+    if (cls) {
+      for (const m of cls.methods) {
+        const label = lang === 'java' ? `arbol.${m.jsig.replace(/^\S+\s+/, '')}` : `arbol.${m.sig}`;
+        chips.push({ label, call: structureCall(m) });
+      }
+    }
     for (const f of functionsOf(program)) {
       const args = f.params.filter(p => !p.def && !p.rest).map((p, i) => (i === 0 ? 'raiz' : '?'));
       const call = `${f.name}(${args.join(', ')})`;
@@ -167,7 +202,7 @@ const Runner = (() => {
     }
     let line;
     try {
-      line = JSParser.parseLine(callInput.value);
+      line = parser().parseLine(callInput.value);
       callInput.classList.remove('has-error');
     } catch (err) {
       callInput.classList.add('has-error');
@@ -215,8 +250,9 @@ const Runner = (() => {
       callText: callInput.value.trim(),
       assignsRoot: /(^|[;\n])\s*(arbol\.)?raiz\s*=[^=]/.test(callInput.value),
       treeClass: resolveTreeClass(a.kind),
+      lang,
     };
-    const interp = new JSInterp.Interpreter(program, {
+    const interp = new JSInterp.Interpreter(runnableProgram(), {
       root: a.root ? heap.get(a.root) : null,
       general,
       treeClass: session.treeClass,
@@ -243,7 +279,7 @@ const Runner = (() => {
 
   function unlock() {
     App.setLocked(false);
-    editor.setReadOnly(false);
+    editor.setReadOnly(viewingSolution);
     callInput.readOnly = false;
   }
 
@@ -291,6 +327,11 @@ const Runner = (() => {
     return 'event';
   }
 
+  /** Resultado final: en Java un método void no devuelve nada. */
+  function resultText(v) {
+    return v === undefined && session?.lang === 'java' ? 'void (no devuelve nada)' : fmt(v, 0, false);
+  }
+
   function shortValue(v) {
     const s = v instanceof JNode ? `«${v.valor}»` : fmt(v, 1, false);
     return s.length > 16 ? s.slice(0, 15) + '…' : s;
@@ -324,9 +365,11 @@ const Runner = (() => {
       console.error(err);
       e = new RuntimeErr(`Error interno del intérprete: ${err.message}`, { line: top?.line });
     }
+    if (lang === 'java') e.message = e.message.replace(/^(TypeError|ReferenceError|SyntaxError): /, '');
     session.status = 'error';
     session.error = e;
     session.errorInCall = !!top?.isMain;
+    session.errorInLib = !!top?.lib;
     unlock();
   }
 
@@ -491,9 +534,10 @@ const Runner = (() => {
   function renderMarks() {
     if (!session) return;
     const it = session.interp;
-    const frames = it.stack.filter(f => !f.isMain);
+    const frames = it.stack.filter(f => !f.isMain && !f.lib);
     if (session.status === 'error') {
-      editor.setMarks({ error: session.errorInCall ? null : session.error.line, stack: frames.map(f => f.line) });
+      const hidden = session.errorInCall || session.errorInLib;
+      editor.setMarks({ error: hidden ? null : session.error.line, stack: frames.map(f => f.line) });
       callInput.classList.toggle('has-error', session.errorInCall);
       return;
     }
@@ -522,7 +566,7 @@ const Runner = (() => {
     const shown = frames.slice(0, MAX);
     let html = `<button type="button" class="stack-head" aria-expanded="${!stackCard.classList.contains('collapsed')}"><b>Pila de llamadas</b><span>${frames.length ? `${frames.length} ${frames.length === 1 ? 'llamada' : 'llamadas'}` : ''}</span></button>`;
     if (session.status === 'done') {
-      html += `<div class="stack-result"><span>Resultado</span><code>${esc(fmt(session.result, 0, false))}</code></div>`;
+      html += `<div class="stack-result"><span>Resultado</span><code>${esc(resultText(session.result))}</code></div>`;
     } else if (session.status === 'error') {
       html += `<div class="stack-error">${esc(session.error.message)}</div>`;
     } else if (!frames.length) {
@@ -537,7 +581,8 @@ const Runner = (() => {
           `<div class="var"><span class="k">${esc(k)}</span><span class="v">${v === undefined ? '<i>sin valor</i>' : esc(shortValue(v))}</span></div>`
         ).join('');
         const ret = f.returned ? `<div class="ret">↩ ${esc(shortValue(f.result))}</div>` : '';
-        return `<li class="frame${i === 0 ? ' top' : ''}"><div class="sig"><b>${esc(f.name)}</b>(${args})<span class="ln">L${f.line ?? '?'}</span></div>${locals}${ret}</li>`;
+        const where = f.lib ? 'incluida' : `L${f.line ?? '?'}`;
+        return `<li class="frame${i === 0 ? ' top' : ''}${f.lib ? ' lib' : ''}"><div class="sig"><b>${esc(f.name)}</b>(${args})<span class="ln">${where}</span></div>${locals}${ret}</li>`;
       }).join('') + '</ol>';
       if (frames.length > MAX) html += `<p class="stack-more">… y ${frames.length - MAX} llamadas más abajo</p>`;
     }
@@ -555,7 +600,7 @@ const Runner = (() => {
     let html = out.slice(-300).map(o => `<div class="c-line">${esc(o.text)}</div>`).join('');
     if (out.length > 300) html = `<div class="c-note">(se muestran las últimas 300 líneas)</div>` + html;
     if (session?.status === 'done') {
-      html += `<div class="c-result"><span class="c-call">› ${esc(session.callText)}</span><span class="c-val">← ${esc(fmt(session.result, 0, false))}</span></div>`;
+      html += `<div class="c-result"><span class="c-call">› ${esc(session.callText)}</span><span class="c-val">← ${esc(resultText(session.result))}</span></div>`;
       const g = session.graph;
       const lost = session.result instanceof JNode && !g.main.has(session.result.id) && !session.assignsRoot;
       if (lost) {
@@ -565,7 +610,9 @@ const Runner = (() => {
       if (session.mutated) html += '<div class="c-note">El árbol cambió. Con Ctrl/⌘+Z volvés a como estaba.</div>';
     }
     if (session?.status === 'error') {
-      const where = session.errorInCall ? 'en la línea de ejecución' : `en la línea ${session.error.line ?? '?'}`;
+      const where = session.errorInCall ? 'en la línea de ejecución'
+        : session.errorInLib ? 'dentro de una clase incluida (revisá los datos que le pasás)'
+        : `en la línea ${session.error.line ?? '?'}`;
       html += `<div class="c-error"><b>Error ${where}</b><br>${esc(session.error.message)}</div>`;
       if (session.mutated) html += '<div class="c-note">El árbol quedó como estaba al momento del error. Con Ctrl/⌘+Z volvés al original.</div>';
     }
@@ -585,6 +632,8 @@ const Runner = (() => {
     btnStop.title = active ? 'Detener y volver al árbol original' : 'Borrar las marcas de la ejecución';
     selCode.disabled = active;
     treeClassSel.disabled = active;
+    btnExample.disabled = active || !exercise || exercise.kind === 'free';
+    langButtons.forEach(b => { b.disabled = active; });
     document.querySelectorAll('.fn-chip').forEach(b => { b.disabled = active; });
     if (!session) runInfo.textContent = '';
     else if (st === 'done') runInfo.textContent = `Terminó en ${session.steps.toLocaleString('es')} pasos`;
@@ -610,32 +659,84 @@ const Runner = (() => {
     selCode.append(og);
   }
 
-  /** Carga el esqueleto del ejercicio (nunca la solución). */
-  function loadExercise(id, { force = false } = {}) {
+  /** Guarda tu código del ejercicio actual antes de cambiar de ejercicio, lenguaje o vista. */
+  function saveDraft() {
+    if (exercise && !viewingSolution) drafts.set(draftKey(), editor.value);
+  }
+
+  /** Muestra en el editor tu código (o el esqueleto) o el ejemplo correcto, según la vista. */
+  function showCode() {
+    const code = viewingSolution ? Exercise.solution(exercise, lang) : drafts.get(draftKey()) ?? Exercise.starter(exercise, lang);
+    editor.setLang(lang);
+    editor.setValue(code);
+    editor.setReadOnly(viewingSolution);
+    solutionBanner.hidden = !viewingSolution;
+    document.body.classList.toggle('viewing-solution', viewingSolution);
+    btnExample.textContent = viewingSolution ? 'Volver a mi código' : 'Ver ejemplo correcto';
+    btnExample.classList.toggle('primary', viewingSolution);
+    btnExample.title = viewingSolution ? 'Volver a tu código (queda como lo dejaste)' : 'Abrir una solución correcta para leerla y ejecutarla (tu código no se pierde)';
+    parseNow();
+  }
+
+  /** Carga un ejercicio: tu borrador si ya lo empezaste, si no el esqueleto (nunca la solución). */
+  function loadExercise(id) {
     const ex = EXERCISES.find(x => x.id === id);
     if (!ex) return;
-    const current = editor.value.trim();
-    const untouched = !exercise || current === exercise.starter.trim() || !current;
-    if (!force && !untouched && !confirm('Vas a perder lo que escribiste en el editor. ¿Cambiar de ejercicio?')) {
-      selCode.value = exercise.id;
-      return;
-    }
     clearSession();
+    saveDraft();
     exercise = ex;
-    editor.setValue(ex.starter);
-    callInput.value = ex.call;
+    viewingSolution = false;
     selCode.value = ex.id;
     treeClassSel.value = '__auto';
-    parseNow();
+    callInput.value = Exercise.call(ex, lang);
+    showCode();
   }
   selCode.addEventListener('change', () => loadExercise(selCode.value));
 
+  function setLang(next) {
+    if (next === lang || isActive()) return;
+    clearSession();
+    saveDraft();
+    const prevCall = exercise ? Exercise.call(exercise, lang) : null;
+    lang = next;
+    langButtons.forEach(b => b.setAttribute('aria-checked', String(b.dataset.lang === lang)));
+    if (callInput.value.trim() === prevCall) callInput.value = Exercise.call(exercise, lang);
+    showCode();
+  }
+  langButtons.forEach(b => b.addEventListener('click', () => setLang(b.dataset.lang)));
+
+  /** «Ver ejemplo correcto»: cambia el editor a la solución (ejecutable); tu código queda guardado. */
+  function toggleSolution(line = null) {
+    if (isActive() || !exercise?.kind || exercise.kind === 'free') return;
+    clearSession();
+    saveDraft();
+    viewingSolution = !viewingSolution;
+    showCode();
+    if (viewingSolution) {
+      App.toast('Ejemplo correcto: ejecutalo para ver cómo funciona. Tu código quedó guardado.');
+      if (line) requestAnimationFrame(() => editor.goToLine(line));
+    }
+  }
+  btnExample.addEventListener('click', () => toggleSolution());
+
   function guideContext() {
+    let mine = lastGood;
+    if (viewingSolution) {
+      try { mine = parser().parseProgram(userCode()); } catch { mine = null; }
+    }
     return {
       exercise,
-      program: lastGood,
-      parseErr,
-      goTo: line => editor.goToLine(line),
+      lang,
+      program: mine,
+      parseErr: viewingSolution ? null : parseErr,
+      goTo: line => {
+        if (viewingSolution) toggleSolution();
+        requestAnimationFrame(() => editor.goToLine(line));
+      },
+      showExample: (name, arity) => {
+        const line = Exercise.solutionLine(exercise, lang, name, arity);
+        if (viewingSolution) { if (line) editor.goToLine(line); } else toggleSolution(line);
+      },
       tryCall: (call, cls) => {
         if (isActive()) return;
         if (cls && userClasses().includes(cls)) {
@@ -647,10 +748,9 @@ const Runner = (() => {
       },
     };
   }
-  $('#btnGuide').addEventListener('click', () => { parseNow(); Guide.open('estructura', guideContext()); });
-  $('#btnExample').addEventListener('click', () => Guide.open('ejemplo', guideContext()));
+  $('#btnGuide').addEventListener('click', () => { if (!viewingSolution) parseNow(); Guide.open(guideContext()); });
 
-  loadExercise('clases', { force: true });
+  loadExercise('ab');
   renderConsole();
   renderControls();
 

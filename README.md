@@ -16,7 +16,7 @@
   <a href="#ejecutar-en-local">Ejecutar en local</a>
 </p>
 
-<p align="center"><sub>HTML · CSS · JavaScript &nbsp; | &nbsp; Sin dependencias &nbsp; | &nbsp; Tema claro y oscuro</sub></p>
+<p align="center"><sub>HTML · CSS · JavaScript &nbsp; | &nbsp; Practicá en JavaScript o Java &nbsp; | &nbsp; Sin dependencias &nbsp; | &nbsp; Tema claro y oscuro</sub></p>
 
 ---
 
@@ -55,7 +55,7 @@ La ejecución vincula el código con el dibujo: resalta el nodo actual, muestra 
 4. Entrá en **Programar**, elegí el ejercicio **Altura** y completá la función.
 5. Ejecutá `altura(raiz)` con **Paso** para seguir las llamadas y los valores que devuelve cada una.
 
-> Los ejercicios empiezan con un esqueleto para completar. **Ver ejemplo correcto** abre una solución de referencia en solo lectura, sin reemplazar tu código.
+> Los ejercicios empiezan con un esqueleto para completar. **Ver ejemplo correcto** muestra en el editor una solución de referencia que podés ejecutar paso a paso; **Volver a mi código** te devuelve lo tuyo tal como estaba.
 
 ## Qué podés aprender
 
@@ -85,7 +85,7 @@ También detecta estructuras que **no son árboles**, como ciclos, múltiples ra
 
 ## Aprender programando
 
-Podés trabajar con **funciones sueltas** o con una **jerarquía de clases en JavaScript**:
+Podés trabajar con **funciones sueltas** o con una **jerarquía de clases**, en **JavaScript o Java**: el selector **JS | Java** está arriba a la derecha del editor.
 
 ```text
 ArbolBinario
@@ -93,7 +93,7 @@ ArbolBinario
     └── ArbolAVL
 ```
 
-La clase `Nodo` ya está incluida. Los métodos pendientes lanzan `Error("No implementado")` hasta que escribas tu solución.
+Cada clase es un ejercicio aparte: **AB**, **ABB** y **AVL**. En ABB y AVL, las clases madre ya vienen incluidas y resueltas, para que te concentres en la clase del ejercicio. La clase `Nodo` siempre está incluida. Los métodos pendientes lanzan `Error("No implementado")` en JavaScript o `UnsupportedOperationException("No implementado")` en Java hasta que escribas tu solución.
 
 | Referencia | Para qué sirve | Ejemplo de llamada¹ |
 | --- | --- | --- |
@@ -103,7 +103,9 @@ La clase `Nodo` ya está incluida. Los métodos pendientes lanzan `Error("No imp
 
 <sub>¹ Las llamadas requieren que hayas implementado el método o la función correspondiente. Si una operación devuelve una nueva raíz, asignala; por ejemplo: <code>arbol.raiz = arbol.rotacionDerecha(arbol.raiz)</code>.</sub>
 
-**Estructura** permite ver los métodos implementados, pendientes, heredados o faltantes, saltar a su línea y preparar una llamada para probarlos.
+**Estructura** muestra las clases y firmas del ejercicio en el lenguaje elegido. Indica qué métodos están implementados, pendientes, heredados o faltantes, y permite saltar a su línea, preparar una llamada para probarlos o abrirlos en el ejemplo correcto.
+
+**Ver ejemplo correcto** cambia el editor a una solución de referencia en solo lectura que podés ejecutar como tu propio código. Tu versión queda guardada mientras la página esté abierta, también si cambiás de ejercicio o de lenguaje.
 
 ### Mirá qué pasa en cada paso
 
@@ -123,20 +125,22 @@ La clase `Nodo` ya está incluida. Los métodos pendientes lanzan `Error("No imp
 | `ArbolBinarioBusqueda` | Inserción ordenada, `contiene`, `buscar`, `eliminar`, `minimo`, `maximo`, `predecesor` y `sucesor`. |
 | `ArbolAVL` | Inserción y eliminación con rebalanceo, `factorBalance`, `estaBalanceado` y rotaciones simples y dobles. |
 
-En la selección automática, `arbol` usa `ArbolAVL` si el dibujo es AVL, `ArbolBinarioBusqueda` si es ABB y `ArbolBinario` si es AB.
+En la selección automática, `arbol` usa la clase del ejercicio siempre que el dibujo lo permita: `ArbolBinarioBusqueda` y `ArbolAVL` necesitan un árbol de búsqueda (ABB o AVL) o un lienzo vacío. Si no, usa la clase más específica que encaje con el dibujo.
 
 Los nodos del dibujo llegan con `altura` calculada. En **Programar**, al activar **Altura / FB**, el campo `altura` se muestra en rojo si no coincide con la altura real: una ayuda para depurar el balanceo.
 
 </details>
 
 <details>
-<summary><strong>JavaScript admitido y límites del intérprete</strong></summary>
+<summary><strong>Lenguajes admitidos y límites del intérprete</strong></summary>
 
-La aplicación interpreta un subconjunto de JavaScript para poder mostrar la ejecución paso a paso.
+La aplicación interpreta un subconjunto de cada lenguaje para poder mostrar la ejecución paso a paso. Ambos comparten el mismo intérprete.
 
-**Incluye:** clases con `extends`, `super` y `this`; funciones y flechas; `let` y `const`; `if`, `while`, `for` y `for…of`; recursión; arrays y sus métodos habituales; objetos; template strings; `?.`, `??`, `Math` y `console.log`. El punto y coma es opcional.
+**JavaScript incluye:** clases con `extends`, `super` y `this`; funciones y flechas; `let` y `const`; `if`, `while`, `for` y `for…of`; recursión; arrays y sus métodos habituales; objetos; template strings; `?.`, `??`, `Math` y `console.log`. El punto y coma es opcional.
 
-**No incluye:** getters/setters de JavaScript, campos `#privados`, `switch`, `try/catch`, `async` ni módulos. Hay un límite de **200 llamadas anidadas**.
+**Java incluye:** clases con `extends`, constructores y métodos sobrecargados, `super(...)` y `this(...)`, `private` y `protected`, `this` implícito, tipos (`int` divide como entero y no acepta decimales sin cast), casts, `if`, `while`, `do…while`, `for` y for-each, arrays, `List`/`ArrayList`, `Queue`/`LinkedList`, `ArrayDeque`, `Stack`, `compareTo`, `equals`, `Math`, `Integer.MAX_VALUE` y `System.out.println`. Los genéricos, las anotaciones, `import` e `implements` se aceptan y se ignoran. Los métodos sueltos van con `static`.
+
+**No incluye:** en JavaScript, getters/setters, campos `#privados`, `async` ni módulos; en Java, interfaces propias, clases internas, lambdas, campos `static` ni `HashMap`/`HashSet`; en ambos, `switch` y `try/catch`. Hay un límite de **200 llamadas anidadas**.
 
 Los errores se muestran en español y señalan la línea correspondiente. Por ejemplo, si escribís `arbol.raz`, el intérprete puede sugerir `raiz`.
 
@@ -162,7 +166,7 @@ Los errores se muestran en español y señalan la línea correspondiente. Por ej
 
 El **dibujo se guarda automáticamente** en el navegador mediante `localStorage`. También podés exportarlo e importarlo en JSON para conservar ejemplos o compartirlos.
 
-**El código del editor no se guarda al recargar la página:** vuelve al esqueleto inicial. Copiá tus implementaciones a un archivo si querés retomarlas después.
+**El código del editor no se guarda al recargar la página:** vuelve al esqueleto inicial. Mientras la página está abierta, cada ejercicio conserva tu código en cada lenguaje. Copiá tus implementaciones a un archivo si querés retomarlas después.
 
 ## Ejecutar en local
 
@@ -197,10 +201,11 @@ TreeDrawer/
     ├── app.js                 Lienzo SVG, interacción y panel
     ├── editor.js              Editor, resaltado y breakpoints
     ├── runner.js              Ejecución y visualización paso a paso
-    ├── guide.js               Guía de estructura y soluciones
+    ├── guide.js               Modal «Estructura a implementar»
     └── lang/
         ├── parser.js          Parser del subconjunto de JavaScript
-        ├── interpreter.js     Intérprete paso a paso
+        ├── java-parser.js     Parser del subconjunto de Java (mismo AST)
+        ├── interpreter.js     Intérprete paso a paso (JavaScript y Java)
         └── examples.js        Ejercicios, esqueletos y referencias
 ```
 

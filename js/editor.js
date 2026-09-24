@@ -6,14 +6,20 @@
 const CodeEditor = (() => {
   const LINE_H = 20;
   const PAD = 10;
-  const INDENT = '  ';
-  const KEYWORDS = new Set(['function', 'return', 'if', 'else', 'while', 'do', 'for', 'of', 'in', 'let', 'const', 'var',
-    'new', 'break', 'continue', 'throw', 'typeof', 'class', 'extends', 'super', 'this', 'static', 'instanceof']);
+  const KEYWORDS = {
+    js: new Set(['function', 'return', 'if', 'else', 'while', 'do', 'for', 'of', 'in', 'let', 'const', 'var',
+      'new', 'break', 'continue', 'throw', 'typeof', 'class', 'extends', 'super', 'this', 'static', 'instanceof']),
+    java: new Set(['public', 'private', 'protected', 'static', 'final', 'abstract', 'class', 'interface', 'extends',
+      'implements', 'return', 'if', 'else', 'while', 'do', 'for', 'new', 'break', 'continue', 'throw', 'throws',
+      'this', 'super', 'instanceof', 'import', 'package', 'void', 'int', 'long', 'short', 'byte', 'double', 'float',
+      'boolean', 'char', 'var']),
+  };
   const LITERALS = new Set(['null', 'undefined', 'true', 'false', 'NaN', 'Infinity']);
 
   const esc = s => s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 
-  function highlight(code) {
+  function highlight(code, lang = 'js') {
+    const kw = KEYWORDS[lang];
     const re = /(\/\/[^\n]*|\/\*[\s\S]*?(?:\*\/|$))|("(?:[^"\\\n]|\\.)*"?|'(?:[^'\\\n]|\\.)*'?|`(?:[^`\\]|\\.)*`?)|(\b\d[\d_]*(?:\.\d+)?\b)|([A-Za-z_$][\w$]*)(\s*\()?|([\s\S])/g;
     let out = '';
     let m;
@@ -24,13 +30,17 @@ const CodeEditor = (() => {
       else if (num) out += `<span class="t-num">${num}</span>`;
       else if (word) {
         let cls = '';
-        if (KEYWORDS.has(word)) cls = 't-kw';
+        if (kw.has(word)) cls = 't-kw';
         else if (LITERALS.has(word)) cls = 't-lit';
         else if (word === 'raiz') cls = 't-root';
         else if (paren) cls = 't-fn';
         else if (/^[A-Z]/.test(word)) cls = 't-type';
         out += cls ? `<span class="${cls}">${word}</span>` : word;
         if (paren) out += esc(paren);
+      } else if (other === '@' && lang === 'java' && /^@\w/.test(code.slice(m.index, m.index + 2))) {
+        const ann = /^@\w+/.exec(code.slice(m.index));
+        out += `<span class="t-com">${esc(ann[0])}</span>`;
+        re.lastIndex = m.index + ann[0].length;
       } else out += esc(other ?? all);
     }
     return out;
@@ -56,12 +66,14 @@ const CodeEditor = (() => {
     const ta = root.querySelector('.ed-input');
 
     let breakpoints = new Set();
+    let lang = 'js';
+    let INDENT = '  ';
     let marks = { active: null, stack: [], error: null, returning: false };
     let lineCount = 0;
 
     function refresh() {
       const code = ta.value;
-      hl.innerHTML = highlight(code) + '\n ';
+      hl.innerHTML = highlight(code, lang) + '\n ';
       const n = code.split('\n').length;
       if (n !== lineCount) {
         lineCount = n;
@@ -168,6 +180,11 @@ const CodeEditor = (() => {
         breakpoints.clear();
         refresh();
         scroll.scrollTo({ top: 0, left: 0 });
+      },
+      setLang(l) {
+        lang = l;
+        INDENT = l === 'java' ? '    ' : '  ';
+        refresh();
       },
       setReadOnly(ro) {
         ta.readOnly = ro;
