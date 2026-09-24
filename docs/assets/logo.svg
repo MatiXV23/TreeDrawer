@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">Logo de TreeDrawer</title>
+  <desc id="desc">Un árbol de tres nodos en violeta y verde sobre fondo oscuro.</desc>
+  <rect width="128" height="128" rx="32" fill="#151821"/>
+  <path d="M64 38 34 87M64 38 94 87" stroke="#8b95ff" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="64" cy="36" r="14" fill="#8b95ff"/>
+  <circle cx="34" cy="88" r="14" fill="#3fc98a"/>
+  <circle cx="94" cy="88" r="14" fill="#3fc98a"/>
+  <circle cx="64" cy="36" r="5" fill="#151821"/>
+  <circle cx="34" cy="88" r="5" fill="#151821"/>
+  <circle cx="94" cy="88" r="5" fill="#151821"/>
+</svg>

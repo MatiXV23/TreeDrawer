@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="440" viewBox="0 0 1280 440" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">TreeDrawer — Entendé los árboles, paso a paso.</title>
+  <desc id="desc">Aplicación didáctica de Matias Perez para dibujar árboles, implementar funciones y visualizar su ejecución. Ilustración de un árbol binario de búsqueda balanceado.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1280" y2="440" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#171c32"/><stop offset="1" stop-color="#11151e"/>
+    </linearGradient>
+    <pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="1" cy="1" r="1" fill="#8b95ff" fill-opacity=".13"/>
+    </pattern>
+  </defs>
+  <rect width="1280" height="440" rx="24" fill="url(#bg)"/>
+  <rect x="680" y="24" width="576" height="392" rx="20" fill="url(#dots)"/>
+  <g transform="translate(56 48)">
+    <rect width="52" height="52" rx="14" fill="#272b4a"/>
+    <path d="m26 15-13 22m13-22 13 22" stroke="#8b95ff" stroke-width="3"/>
+    <circle cx="26" cy="15" r="6" fill="#8b95ff"/>
+    <circle cx="13" cy="37" r="6" fill="#3fc98a"/>
+    <circle cx="39" cy="37" r="6" fill="#3fc98a"/>
+  </g>
+  <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+    <text x="124" y="81" fill="#b7befa" font-size="14" font-weight="600" letter-spacing="3">DIBUJÁ · PROGRAMÁ · COMPRENDÉ</text>
+    <text x="52" y="176" fill="#f2f4ff" font-size="68" font-weight="750" letter-spacing="-3">TreeDrawer</text>
+    <text x="56" y="231" fill="#d6dbef" font-size="29" font-weight="500">Entendé los árboles, paso a paso.</text>
+    <text x="56" y="272" fill="#9ca6bf" font-size="19">Tus ideas, tu código y cada nodo a la vista.</text>
+    <g font-size="13" font-weight="600" text-anchor="middle">
+      <rect x="56" y="309" width="58" height="30" rx="15" fill="#292840"/><text x="85" y="329" fill="#c2b7f0">AG</text>
+      <rect x="124" y="309" width="58" height="30" rx="15" fill="#292840"/><text x="153" y="329" fill="#c2b7f0">AB</text>
+      <rect x="192" y="309" width="66" height="30" rx="15" fill="#1e3048"/><text x="225" y="329" fill="#8bc8ff">ABB</text>
+      <rect x="268" y="309" width="66" height="30" rx="15" fill="#193c31"/><text x="301" y="329" fill="#77e4b3">AVL</text>
+    </g>
+    <text x="56" y="394" fill="#9ca6bf" font-size="14">Un proyecto de Matias Perez</text>
+    <g stroke="#414b69" stroke-width="3">
+      <path d="m964 100-120 108m120-108 120 108M844 208l-60 106m60-106 60 106m180-106-60 106m60-106 60 106"/>
+      <path d="m964 100-120 108m0 0 60 106" stroke="#8b95ff" stroke-width="4"/>
+    </g>
+    <g stroke-width="2" font-size="23" font-weight="600" text-anchor="middle" dominant-baseline="central">
+      <circle cx="964" cy="100" r="29" fill="#272b4a" stroke="#8b95ff"/><text x="964" y="100" fill="#e4e7ff">40</text>
+      <circle cx="844" cy="208" r="29" fill="#272b4a" stroke="#8b95ff"/><text x="844" y="208" fill="#e4e7ff">20</text>
+      <circle cx="1084" cy="208" r="29" fill="#1a2232" stroke="#64708f"/><text x="1084" y="208" fill="#b6c0d9">60</text>
+      <circle cx="784" cy="314" r="25" fill="#1a2232" stroke="#64708f"/><text x="784" y="314" fill="#b6c0d9">10</text>
+      <circle cx="904" cy="314" r="33" fill="#3fc98a" fill-opacity=".08" stroke="#3fc98a" stroke-opacity=".25"/>
+      <circle cx="904" cy="314" r="25" fill="#193c31" stroke="#3fc98a"/><text x="904" y="314" fill="#8eecc3">30</text>
+      <circle cx="1024" cy="314" r="25" fill="#1a2232" stroke="#64708f"/><text x="1024" y="314" fill="#b6c0d9">50</text>
+      <circle cx="1144" cy="314" r="25" fill="#1a2232" stroke="#64708f"/><text x="1144" y="314" fill="#b6c0d9">70</text>
+    </g>
+    <text x="970" y="393" text-anchor="middle" fill="#a6b1cb" font-size="15" font-family="ui-monospace, monospace">buscar(raiz, 30) <tspan fill="#77e4b3">→ encontrado</tspan></text>
+  </g>
+</svg>
