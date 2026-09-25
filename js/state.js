@@ -1,15 +1,28 @@
-/* Estado del lienzo con historial (deshacer/rehacer) y persistencia local. */
+/*
+ * Estado del lienzo con historial (deshacer/rehacer) y persistencia local.
+ * Hay dos espacios de trabajo independientes, cada uno con su dibujo e historial:
+ * «tree» (árboles: aristas padre → hijo) y «graph» (grafos: dirigidos o no, con pesos opcionales).
+ */
 
 const Store = (() => {
-  const KEY = 'treedrawer:state:v1';
+  const KEYS = { tree: 'treedrawer:state:v1', graph: 'treedrawer:graph:v1' };
   const LIMIT = 200;
 
-  let state = { nodes: [], edges: [], nextId: 1 };
-  let undoStack = [];
-  let redoStack = [];
+  const blank = kind => (kind === 'graph'
+    ? { nodes: [], edges: [], nextId: 1, directed: false, weighted: false }
+    : { nodes: [], edges: [], nextId: 1 });
+
+  const spaces = {
+    tree: { state: blank('tree'), undo: [], redo: [] },
+    graph: { state: blank('graph'), undo: [], redo: [] },
+  };
+  let kind = 'tree';
+  let ws = spaces.tree;
   let listener = () => {};
 
-  function sanitize(raw) {
+  const pairKey = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
+
+  function sanitize(raw, k = kind) {
     const nodes = [];
     const ids = new Set();
     for (const n of Array.isArray(raw?.nodes) ? raw.nodes : []) {
@@ -23,40 +36,56 @@ const Store = (() => {
         y: Number.isFinite(+n.y) ? +n.y : 0,
       });
     }
+    const graph = k === 'graph';
+    const directed = graph && !!raw?.directed;
     const seen = new Set();
     const edges = [];
     for (const e of Array.isArray(raw?.edges) ? raw.edges : []) {
       const from = String(e?.from ?? ''), to = String(e?.to ?? '');
-      const key = `${from}>${to}`;
+      // En un grafo no dirigido A–B y B–A son la misma arista.
+      const key = graph && !directed ? pairKey(from, to) : `${from}>${to}`;
       if (from === to || !ids.has(from) || !ids.has(to) || seen.has(key)) continue;
       seen.add(key);
-      edges.push({ from, to });
+      if (graph) edges.push({ from, to, w: Number.isFinite(+e.w) ? Math.trunc(+e.w) : 1 });
+      else edges.push({ from, to });
     }
     const maxId = Math.max(0, ...nodes.map(n => parseInt(n.id.replace(/\D/g, ''), 10) || 0));
-    return { nodes, edges, nextId: Math.max(maxId + 1, +raw?.nextId || 1) };
+    const out = { nodes, edges, nextId: Math.max(maxId + 1, +raw?.nextId || 1) };
+    if (graph) Object.assign(out, { directed, weighted: !!raw?.weighted });
+    return out;
   }
 
   function persist() {
-    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { /* sin almacenamiento */ }
+    try { localStorage.setItem(KEYS[kind], JSON.stringify(ws.state)); } catch { /* sin almacenamiento */ }
   }
 
   function restore() {
-    try {
-      const raw = localStorage.getItem(KEY);
-      if (raw) state = sanitize(JSON.parse(raw));
-    } catch { /* datos corruptos o sin acceso */ }
+    for (const k of Object.keys(spaces)) {
+      try {
+        const raw = localStorage.getItem(KEYS[k]);
+        if (raw) spaces[k].state = sanitize(JSON.parse(raw), k);
+      } catch { /* datos corruptos o sin acceso */ }
+    }
+  }
+
+  /** Cambia de espacio de trabajo (árbol o grafo); cada uno conserva su dibujo e historial. */
+  function setKind(k) {
+    if (!spaces[k] || k === kind) return;
+    kind = k;
+    ws = spaces[k];
+    listener();
   }
 
   function checkpoint() {
-    undoStack.push(JSON.stringify(state));
-    if (undoStack.length > LIMIT) undoStack.shift();
-    redoStack = [];
+    ws.undo.push(JSON.stringify(ws.state));
+    if (ws.undo.length > LIMIT) ws.undo.shift();
+    ws.redo = [];
   }
 
   /** Aplica un cambio guardando un punto de deshacer. */
   function mutate(fn) {
     checkpoint();
-    const out = fn(state);
+    const out = fn(ws.state);
     commit();
     return out;
   }
@@ -67,24 +96,24 @@ const Store = (() => {
   function commit() { persist(); listener(); }
 
   function undo() {
-    if (!undoStack.length) return false;
-    redoStack.push(JSON.stringify(state));
-    state = JSON.parse(undoStack.pop());
+    if (!ws.undo.length) return false;
+    ws.redo.push(JSON.stringify(ws.state));
+    ws.state = JSON.parse(ws.undo.pop());
     commit();
     return true;
   }
 
   function redo() {
-    if (!redoStack.length) return false;
-    undoStack.push(JSON.stringify(state));
-    state = JSON.parse(redoStack.pop());
+    if (!ws.redo.length) return false;
+    ws.undo.push(JSON.stringify(ws.state));
+    ws.state = JSON.parse(ws.redo.pop());
     commit();
     return true;
   }
 
   function replace(next) {
     checkpoint();
-    state = sanitize(next);
+    ws.state = sanitize(next);
     commit();
   }
 
@@ -118,18 +147,45 @@ const Store = (() => {
 
   /** Devuelve un mensaje de error si no se puede conectar, o null. */
   function linkError(s, from, to) {
+    if (kind === 'graph') {
+      if (from === to) return 'Un vértice no puede conectarse consigo mismo (no se admiten lazos).';
+      const dup = s.edges.some(e => (e.from === from && e.to === to) || (!s.directed && e.from === to && e.to === from));
+      return dup ? 'Esa arista ya existe.' : null;
+    }
     if (from === to) return 'Un nodo no puede ser hijo de sí mismo.';
     if (s.edges.some(e => e.from === from && e.to === to)) return 'Esa conexión ya existe.';
     if (isAncestor(s, to, from)) return 'Esa conexión formaría un ciclo.';
     return null;
   }
 
-  /** Conecta padre → hijo; si el hijo ya tenía padre, lo reemplaza. */
+  /**
+   * Árbol: conecta padre → hijo; si el hijo ya tenía padre, lo reemplaza (devuelve true).
+   * Grafo: agrega la arista con peso 1.
+   */
   function link(s, from, to) {
+    if (kind === 'graph') {
+      s.edges.push({ from, to, w: 1 });
+      return false;
+    }
     const replaced = s.edges.some(e => e.to === to);
     s.edges = s.edges.filter(e => e.to !== to);
     s.edges.push({ from, to });
     return replaced;
+  }
+
+  /** Grafo: pasa a dirigido o a no dirigido. Al quitar el sentido, A→B y B→A se unen. Devuelve cuántas se unieron. */
+  function setDirected(s, directed) {
+    s.directed = directed;
+    if (directed) return 0;
+    const seen = new Set();
+    const before = s.edges.length;
+    s.edges = s.edges.filter(e => {
+      const k = pairKey(e.from, e.to);
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+    return before - s.edges.length;
   }
 
   function descendants(s, id) {
@@ -147,12 +203,13 @@ const Store = (() => {
   }
 
   return {
-    get state() { return state; },
-    node: id => state.nodes.find(n => n.id === id) || null,
+    get state() { return ws.state; },
+    get kind() { return kind; },
+    node: id => ws.state.nodes.find(n => n.id === id) || null,
     setListener(fn) { listener = fn; },
-    canUndo: () => undoStack.length > 0,
-    canRedo: () => redoStack.length > 0,
-    restore, checkpoint, mutate, touch, commit, undo, redo, replace,
-    addNode, removeNodes, linkError, link, descendants,
+    canUndo: () => ws.undo.length > 0,
+    canRedo: () => ws.redo.length > 0,
+    restore, setKind, checkpoint, mutate, touch, commit, undo, redo, replace,
+    addNode, removeNodes, linkError, link, setDirected, descendants,
   };
 })();

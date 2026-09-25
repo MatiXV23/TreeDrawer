@@ -1150,11 +1150,15 @@ function structureArity(m) {
   return /\(([^)]*)\)/.exec(m.sig)[1].split(',').filter(x => x.trim()).length;
 }
 
-/** Línea de ejecución sugerida para un método de la estructura (igual en JS y en Java). */
-function structureCall(m) {
+/**
+ * Línea de ejecución sugerida para un método de la estructura (igual en JS y en Java).
+ * En los grafos, {v} y {w} se reemplazan por valores de vértices del dibujo al usarla.
+ */
+function structureCall(m, obj = 'arbol') {
   const params = /\(([^)]*)\)/.exec(m.sig)[1].split(',').map(x => x.trim()).filter(Boolean);
-  const args = params.map(p => (p === 'nodo' ? 'arbol.raiz' : '?'));
-  const call = `arbol.${m.name}(${args.join(', ')})`;
+  const GRAPH_ARG = { dato: '{v}', origen: '{v}', destino: '{w}', peso: '5' };
+  const args = params.map(p => (p === 'nodo' ? 'arbol.raiz' : obj === 'grafo' ? GRAPH_ARG[p] ?? '?' : '?'));
+  const call = `${obj}.${m.name}(${args.join(', ')})`;
   return m.name.startsWith('rotacion') ? `arbol.raiz = ${call}` : call;
 }
 
@@ -1456,24 +1460,26 @@ const Exercise = (() => {
     return cache.get(key);
   };
 
+  const graph = ex => ex.space === 'graph';
+
   function solution(ex, lang) {
-    if (ex.kind === 'classes') return classHeader(ex, lang) + CLASS_CODE[lang].solution[ex.cls];
+    if (ex.kind === 'classes') return (graph(ex) ? graphClassHeader : classHeader)(ex, lang) + CLASS_CODE[lang].solution[ex.cls];
     if (ex.kind === 'functions') {
       const fns = lang === 'java' ? JAVA_FUNCTIONS : JS_FUNCTIONS;
-      return FN_TASK[lang] + '\n' + ex.fns.map(k => fns[k]).join('\n\n') + '\n';
+      return (graph(ex) ? GRAPH_FN_TASK : FN_TASK)[lang] + '\n' + ex.fns.map(k => fns[k]).join('\n\n') + '\n';
     }
     return null;
   }
 
   function starter(ex, lang) {
-    if (ex.kind === 'classes') return classHeader(ex, lang) + CLASS_CODE[lang].skeleton[ex.cls];
+    if (ex.kind === 'classes') return (graph(ex) ? graphClassHeader : classHeader)(ex, lang) + CLASS_CODE[lang].skeleton[ex.cls];
     if (ex.kind === 'functions') return memo(`stub:${ex.id}:${lang}`, () => makeStub(solution(ex, lang), lang));
-    return BLANK[lang];
+    return (graph(ex) ? GRAPH_BLANK : BLANK)[lang];
   }
 
-  /** Código incluido (clases madre resueltas) que se carga antes del código del editor. */
+  /** Código incluido (clases resueltas que el ejercicio da hechas) que se carga antes del código del editor. */
   function prelude(ex, lang) {
-    if (ex.kind !== 'classes' || !ex.provides.length) return null;
+    if (!ex.provides?.length) return null;
     return memo(`prelude:${ex.id}:${lang}`, () => {
       const prog = LANGS[lang].parser().parseProgram(ex.provides.map(c => CLASS_CODE[lang].solution[c]).join('\n'));
       (function mark(n) {
@@ -1498,5 +1504,5 @@ const Exercise = (() => {
     return null;
   }
 
-  return { solution, starter, prelude, solutionLine, call: (ex, lang) => ex.call[lang] };
+  return { solution, starter, prelude, solutionLine, call: (ex, lang) => ex.call[lang], space: ex => ex.space ?? 'tree' };
 })();

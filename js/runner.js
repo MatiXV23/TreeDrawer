@@ -1,11 +1,11 @@
 /*
- * Modo Programar: editor, ejecución paso a paso y visualización sobre el árbol.
- * El intérprete trabaja sobre JNode propios; después de cada paso se vuelcan al
- * lienzo (valores, aristas, nodos nuevos o desenganchados) y se animan.
+ * Modo Programar: editor, ejecución paso a paso y visualización sobre el árbol o el grafo.
+ * El intérprete trabaja sobre JNode (árboles) o Vertice/Arista (grafos) propios; después de
+ * cada paso se vuelcan al lienzo (valores, aristas, nodos nuevos o sueltos).
  */
 const Runner = (() => {
   const $ = s => document.querySelector(s);
-  const { fmt, JNode, RuntimeErr } = JSInterp;
+  const { fmt, JNode, JVertex, JEdge, JMap, JSet, JList, RuntimeErr } = JSInterp;
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const MAX_STEPS = 2_000_000;
   const MUTATOR_NAME = /insert|elimin|borr|agreg|quitar|rotar|espejo|reempl|podar|remove|delete|add/i;
@@ -25,6 +25,12 @@ const Runner = (() => {
   const btnExample = $('#btnExample');
   const solutionBanner = $('#solutionBanner');
   const langButtons = document.querySelectorAll('#langSwitch [data-lang]');
+  const objNameEl = $('#objName');
+  // Nombres de variables que suelen guardar un vértice (o su dato), para marcarlos en el dibujo.
+  const VERTEX_VAR = /^(v|u|w|vertice|vert|actual|vecino|ady|adyacente|origen|destino|desde|hasta|inicio|fin|nodo|siguiente|sig|previo|anterior|padre|hijo|dato|elegido|mejor|cur|current|next|src|dst|dest)\d*$/i;
+  const VISITED_VAR = /visit|marcad/i;
+  const QUEUE_VAR = /cola|queue|pila|stack|frontera|pendiente|abierto|porVisitar/i;
+  const CURRENT_VAR = /^(actual|act|cur|current|u|v|vertice)$/i;
 
   let lang = 'js';
   let program = null;       // código del editor (tuyo o el ejemplo correcto)
@@ -35,6 +41,11 @@ const Runner = (() => {
   let session = null;
   let viewingSolution = false;
   const drafts = new Map(); // «ejercicio:lenguaje» → tu código (solo en memoria)
+  const lastExercise = { tree: 'ab', graph: 'grafo' };
+
+  const space = () => (typeof App !== 'undefined' ? App.space : 'tree');
+  const isGraphSpace = () => space() === 'graph';
+  const objName = () => (isGraphSpace() ? 'grafo' : 'arbol');
 
   const parser = () => LANGS[lang].parser();
   const draftKey = () => `${exercise.id}:${lang}`;
@@ -74,7 +85,7 @@ const Runner = (() => {
   /** Clases disponibles: las incluidas por el ejercicio y las del editor. */
   function userClasses() {
     const own = (lastGood?.body ?? []).filter(s => s.t === 'classdecl').map(s => s.name);
-    const provided = exercise?.kind === 'classes' ? exercise.provides : [];
+    const provided = exercise?.provides ?? [];
     return [...new Set([...provided, ...own])];
   }
 
@@ -86,6 +97,10 @@ const Runner = (() => {
 
   function autoClass(kind) {
     const names = userClasses();
+    if (isGraphSpace()) {
+      if (exercise?.cls && names.includes(exercise.cls)) return exercise.cls;
+      return names.includes('Grafo') ? 'Grafo' : names.find(n => !CLASS_ORDER.includes(n)) ?? null;
+    }
     if (kind === 'AG' || !names.length) return null;
     if (exercise?.cls && names.includes(exercise.cls) && compatible(exercise.cls, kind)) return exercise.cls;
     return ['ArbolAVL', 'ArbolBinarioBusqueda', 'ArbolBinario'].find(n => names.includes(n) && compatible(n, kind))
@@ -93,7 +108,7 @@ const Runner = (() => {
   }
 
   function currentKind() {
-    return analyzeTree(Store.state.nodes, Store.state.edges).kind;
+    return isGraphSpace() ? analyzeGraph(Store.state).kind : analyzeTree(Store.state.nodes, Store.state.edges).kind;
   }
 
   /** Clase con la que se crea «arbol» (o null: objeto simple con raiz). */
@@ -106,6 +121,8 @@ const Runner = (() => {
 
   function renderTreeClasses() {
     const names = userClasses();
+    objNameEl.textContent = objName();
+    treeClassSel.setAttribute('aria-label', `Clase de ${objName()}`);
     treeRow.hidden = !names.length;
     if (!names.length) return;
     const cur = treeClassSel.value || '__auto';
@@ -113,7 +130,7 @@ const Runner = (() => {
     treeClassSel.innerHTML =
       `<option value="__auto">Automático${auto ? ` (${auto})` : ' (sin clase)'}</option>` +
       names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('') +
-      '<option value="__none">Sin clase (solo raiz)</option>';
+      `<option value="__none">${isGraphSpace() ? 'Sin clase (objeto con vertices)' : 'Sin clase (solo raiz)'}</option>`;
     treeClassSel.value = [...treeClassSel.options].some(o => o.value === cur) ? cur : '__auto';
   }
   treeClassSel.addEventListener('pointerdown', renderTreeClasses);
@@ -158,24 +175,53 @@ const Runner = (() => {
     statusEl.textContent = `Sin errores · ${parts.join(' · ')}`;
   }
 
+  /** Valor de un vértice escrito como en el código: 3 o "A". */
+  function vertexLiteral(n) {
+    const k = keyOf(n);
+    return NUMERIC_RE.test(k) ? String(Number(k)) : JSON.stringify(k);
+  }
+
+  /** Reemplaza {v} y {w} por el primer y el último vértice del dibujo (en orden). */
+  function fillCall(call) {
+    if (!/\{[vw]\}/.test(call)) return call;
+    const nodes = [...Store.state.nodes].sort(vertexComparator(Store.state.nodes).cmp);
+    const v = nodes.length ? vertexLiteral(nodes[0]) : '1';
+    const w = nodes.length > 1 ? vertexLiteral(nodes[nodes.length - 1]) : '2';
+    return call.replaceAll('{v}', v).replaceAll('{w}', w);
+  }
+
+  /** Pone la llamada sugerida del ejercicio; mientras no la edites, sigue a los vértices del dibujo. */
+  let autoCall = null;
+  function setDefaultCall() {
+    autoCall = fillCall(Exercise.call(exercise, lang));
+    callInput.value = autoCall;
+  }
+  function refreshDefaultCall() {
+    if (exercise && callInput.value.trim() === autoCall) setDefaultCall();
+  }
+
   function setCall(call) {
-    callInput.value = call;
+    callInput.value = fillCall(call);
     callInput.focus();
-    const q = call.indexOf('?');
+    const q = callInput.value.indexOf('?');
     if (q >= 0) callInput.setSelectionRange(q, q + 1);
   }
 
+  const structureOf = name => [...TREE_STRUCTURE, ...GRAPH_STRUCTURE].find(c => c.name === name && !c.builtin);
+
   function renderFnList() {
     const chips = [];
-    const cls = TREE_STRUCTURE.find(c => c.name === resolveTreeClass());
+    const obj = objName();
+    const cls = structureOf(resolveTreeClass());
     if (cls) {
       for (const m of cls.methods) {
-        const label = lang === 'java' ? `arbol.${m.jsig.replace(/^\S+\s+/, '')}` : `arbol.${m.sig}`;
-        chips.push({ label, call: structureCall(m) });
+        const label = lang === 'java' ? `${obj}.${m.jsig.replace(/^\S+\s+/, '')}` : `${obj}.${m.sig}`;
+        chips.push({ label, call: structureCall(m, obj) });
       }
     }
+    const GRAPH_ARG = { grafo: 'grafo', g: 'grafo', dato: '{v}', origen: '{v}', inicio: '{v}', desde: '{v}', v: '{v}', destino: '{w}', hasta: '{w}', fin: '{w}', w: '{w}' };
     for (const f of functionsOf(program)) {
-      const args = f.params.filter(p => !p.def && !p.rest).map((p, i) => (i === 0 ? 'raiz' : '?'));
+      const args = f.params.filter(p => !p.def && !p.rest).map((p, i) => (isGraphSpace() ? GRAPH_ARG[p.name] ?? (i === 0 ? 'grafo' : '?') : i === 0 ? 'raiz' : '?'));
       const call = `${f.name}(${args.join(', ')})`;
       chips.push({
         label: `${f.name}(${f.params.map(p => p.name).join(', ')})`,
@@ -196,6 +242,7 @@ const Runner = (() => {
 
   function startSession() {
     clearSession();
+    refreshDefaultCall();
     if (!parseNow()) {
       App.toast('Hay un error en el código: corregilo antes de ejecutar.', 'error');
       return false;
@@ -209,6 +256,7 @@ const Runner = (() => {
       App.toast(`Línea de ejecución: ${err.message}`, 'error');
       return false;
     }
+    if (isGraphSpace()) return startGraphSession(line);
     const { nodes, edges } = Store.state;
     const a = analyzeTree(nodes, edges);
     if (a.kind === 'NONE') {
@@ -234,6 +282,7 @@ const Runner = (() => {
     }
     const rootStore = a.root ? Store.node(a.root) : null;
     session = {
+      space: 'tree',
       status: 'paused',
       general,
       mutated: false,
@@ -264,6 +313,70 @@ const Runner = (() => {
     session.gen = interp.run(line);
     session.graph = interp.graph();
     session.sig = graphSig(session.graph);
+    App.setLocked(true);
+    editor.setReadOnly(true);
+    callInput.readOnly = true;
+    return true;
+  }
+
+  /** Grafo: los vértices (en orden creciente) con sus aristas, también en orden, como listas de adyacencia. */
+  function startGraphSession(line) {
+    const st = Store.state;
+    const a = analyzeGraph(st);
+    const keys = st.nodes.map(n => keyOf(n));
+    if (keys.some(k => k === '')) {
+      App.toast('Hay vértices sin valor: completalos antes de ejecutar.', 'error');
+      return false;
+    }
+    const dup = keys.find((k, i) => keys.indexOf(k) !== i);
+    if (dup !== undefined) {
+      App.toast(`«${dup}» está en más de un vértice: cada vértice necesita un valor distinto para poder buscarlo.`, 'error');
+      return false;
+    }
+    const m = a.model;
+    const dato = id => (m.numeric ? Number(keyOf(m.byId.get(id))) : keyOf(m.byId.get(id)));
+    const spec = {
+      directed: !!st.directed,
+      vertices: m.order.map(id => ({ id, dato: dato(id), ady: m.out.get(id).map(to => ({ to, w: m.weight.get(`${id}>${to}`) })) })),
+    };
+    session = {
+      space: 'graph',
+      status: 'paused',
+      directed: spec.directed,
+      mutated: false,
+      anchor: App.viewCenter(),
+      visited: new Set(),
+      returns: new Map(),
+      result: undefined,
+      resultNode: null,
+      error: null,
+      errorInCall: false,
+      lastEvent: null,
+      steps: 0,
+      timer: 0,
+      callText: callInput.value.trim(),
+      treeClass: resolveTreeClass(a.kind),
+      lang,
+      sig: null,
+      edgeWarn: new Map(),
+      edgeOf: new Map(),
+      datoIndex: new Map(),
+    };
+    const interp = new JSInterp.Interpreter(runnableProgram(), {
+      graph: spec,
+      treeClass: session.treeClass,
+      allocId: () => 'n' + Store.state.nextId++,
+      onMutate: markMutated,
+    });
+    session.interp = interp;
+    session.gen = interp.run(line);
+    // Antes del primer paso el grafo es el dibujado (el intérprete lo arma al arrancar).
+    session.graph = {
+      nodes: spec.vertices.map(v => ({ id: v.id, dato: v.dato })),
+      edges: spec.vertices.flatMap(v => v.ady.map(a => ({ from: v.id, to: a.to, w: a.w, edge: null }))),
+      main: new Set(spec.vertices.map(v => v.id)),
+    };
+    session.sig = graphViewOf(session.graph).sig;
     App.setLocked(true);
     editor.setReadOnly(true);
     callInput.readOnly = true;
@@ -318,10 +431,10 @@ const Runner = (() => {
     session.lastEvent = ev;
     const it = session.interp;
     if (ev.kind === 'call') {
-      const n = it.frameNode(ev.frame);
+      const n = focusOf(ev.frame);
       if (n) { session.visited.add(n.id); session.returns.delete(n.id); }
     } else if (ev.kind === 'return') {
-      const n = it.frameNode(ev.frame);
+      const n = focusOf(ev.frame);
       if (n && ev.value !== undefined) session.returns.set(n.id, shortValue(ev.value));
     }
     return 'event';
@@ -335,6 +448,40 @@ const Runner = (() => {
   function shortValue(v) {
     const s = v instanceof JNode ? `«${v.valor}»` : fmt(v, 1, false);
     return s.length > 16 ? s.slice(0, 15) + '…' : s;
+  }
+
+  /** Variables locales: las colecciones (colas, mapas de distancias…) se muestran más largas. */
+  function localValue(v) {
+    if (!(v instanceof JList || v instanceof JMap || v instanceof JSet || Array.isArray(v))) return shortValue(v);
+    const s = fmt(v, 1, false);
+    return s.length > 60 ? s.slice(0, 59) + '…' : s;
+  }
+
+  /** Clave para buscar un vértice por su dato (3 y "3" son distintos). */
+  const datoKey = v => `${typeof v}:${v}`;
+
+  /** El vértice que corresponde a un valor: el propio Vertice o el vértice con ese dato. */
+  function vertexFor(v) {
+    if (v instanceof JVertex) return v;
+    if (typeof v === 'number' || typeof v === 'string') return session.datoIndex.get(datoKey(v)) ?? null;
+    return null;
+  }
+
+  /**
+   * Nodo (o vértice) en foco de una llamada: su primer parámetro que sea un nodo o un vértice;
+   * en los grafos también el primer parámetro con nombre de vértice (origen, v, actual…) que
+   * tenga el dato de un vértice.
+   */
+  function focusOf(f) {
+    if (!f || f.isMain) return null;
+    const direct = session.interp.frameNode(f);
+    if (direct || session.space !== 'graph' || !f.fn) return direct;
+    for (const p of f.fn.decl.params) {
+      if (!VERTEX_VAR.test(p.name)) continue;
+      const hit = vertexFor(f.baseEnv.vars.get(p.name)?.v);
+      if (hit) return hit;
+    }
+    return null;
   }
 
   function topFrame() {
@@ -351,7 +498,7 @@ const Runner = (() => {
     stopTimer();
     session.status = 'done';
     session.result = value;
-    if (value instanceof JNode) session.resultNode = value.id;
+    if (value instanceof JNode || value instanceof JVertex) session.resultNode = value.id;
     unlock();
   }
 
@@ -453,12 +600,13 @@ const Runner = (() => {
     if (!session) return;
     if (isActive()) {
       const mutated = session.mutated;
+      const noun = session.space === 'graph' ? 'el grafo' : 'el árbol';
       stopTimer();
       unlock();
       session.status = 'stopped';
       if (mutated) Store.undo();
       clearSession();
-      App.toast(mutated ? 'Ejecución detenida: el árbol volvió a como estaba.' : 'Ejecución detenida.');
+      App.toast(mutated ? `Ejecución detenida: ${noun} volvió a como estaba.` : 'Ejecución detenida.');
     } else {
       clearSession();
     }
@@ -487,7 +635,87 @@ const Runner = (() => {
     return s ? { x: s.x + 46, y: s.y + 64 } : { ...session.anchor };
   }
 
+  /**
+   * Cómo se dibuja el estado del grafo. En un no dirigido, A→B y B→A (las dos entradas de la
+   * lista de adyacencia) son una sola línea; si falta una de las dos, o los pesos no coinciden,
+   * la arista queda marcada.
+   */
+  function graphViewOf(g) {
+    const label = id => { const v = g.nodes.find(x => x.id === id); return v ? fmt(v.dato) : '?'; };
+    const edges = [], warn = new Map(), edgeOf = new Map();
+    if (session.directed) {
+      for (const e of g.edges) {
+        const key = `${e.from}>${e.to}`;
+        edgeOf.set(e.edge, key);
+        if (edges.some(x => x.from === e.from && x.to === e.to)) {
+          warn.set(key, { text: `La arista ${label(e.from)} → ${label(e.to)} está repetida en la lista de adyacentes.` });
+          continue;
+        }
+        edges.push({ from: e.from, to: e.to, w: e.w });
+      }
+    } else {
+      const pairs = new Map();
+      for (const e of g.edges) {
+        const k = e.from < e.to ? `${e.from}|${e.to}` : `${e.to}|${e.from}`;
+        let p = pairs.get(k);
+        if (!p) { p = { from: e.from, to: e.to, w: e.w, fwd: 0, back: 0, wBack: null }; pairs.set(k, p); }
+        if (e.from === p.from) p.fwd++;
+        else { p.back++; p.wBack = e.w; }
+        edgeOf.set(e.edge, `${p.from}>${p.to}`);
+      }
+      for (const p of pairs.values()) {
+        const key = `${p.from}>${p.to}`;
+        const [a, b] = [label(p.from), label(p.to)];
+        if (!p.back) warn.set(key, { oneWay: true, text: `Solo está ${a} → ${b}: en un grafo no dirigido falta la arista de vuelta (${b} → ${a}).` });
+        else if (p.fwd > 1 || p.back > 1) warn.set(key, { text: `La arista ${a} — ${b} está repetida en la lista de adyacentes.` });
+        else if (p.wBack !== p.w) warn.set(key, { text: `Los pesos de ida y vuelta no coinciden (${a} → ${b}: ${p.w}, ${b} → ${a}: ${p.wBack}).` });
+        edges.push({ from: p.from, to: p.to, w: p.w });
+      }
+    }
+    const sig = g.nodes.map(v => `${v.id}=${datoKey(v.dato)}`).join(',') + '#' + edges.map(e => `${e.from}>${e.to}/${e.w}`).join(',');
+    return { edges, warn, edgeOf, sig };
+  }
+
+  /** Dónde aparecen los vértices nuevos: cerca del vértice en foco, o del centro de la vista. */
+  function graphSpawnNear() {
+    const f = focusOf(topFrame());
+    return (f && Store.node(f.id)) || session.anchor;
+  }
+
+  function syncGraph() {
+    const g = session.interp.graphState();
+    session.graph = g;
+    session.datoIndex = new Map();
+    for (const v of g.nodes) if (!session.datoIndex.has(datoKey(v.dato))) session.datoIndex.set(datoKey(v.dato), v);
+    const view = graphViewOf(g);
+    session.edgeWarn = view.warn;
+    session.edgeOf = view.edgeOf;
+    if (view.sig === session.sig) { Store.touch(); return; }
+    // Primer cambio: se guarda el dibujo original para poder volver (Detener o Ctrl+Z).
+    markMutated();
+    session.sig = view.sig;
+    const st = Store.state;
+    const old = new Map(st.nodes.map(n => [n.id, n]));
+    const taken = g.nodes.filter(v => old.has(v.id)).map(v => old.get(v.id));
+    const near = graphSpawnNear();
+    st.nodes = g.nodes.map(v => {
+      const value = String(v.dato);
+      const o = old.get(v.id);
+      if (!o) {
+        // Los vértices nuevos se ubican de a uno, sin pisar a los demás.
+        const n = { id: v.id, value, ...App.freeSpotNear(near, taken) };
+        taken.push(n);
+        return n;
+      }
+      if (keyOf(o) !== value && !(typeof v.dato === 'number' && Number(keyOf(o)) === v.dato)) o.value = value;
+      return o;
+    });
+    st.edges = view.edges;
+    Store.touch();
+  }
+
   function sync() {
+    if (session.space === 'graph') return syncGraph();
     const it = session.interp;
     const g = it.graph();
     const st = Store.state;
@@ -578,7 +806,7 @@ const Runner = (() => {
         const vars = varList(f);
         const args = vars.filter(([k]) => params.has(k)).map(([k, v]) => `<span class="k">${esc(k)}</span>=<span class="v">${esc(shortValue(v))}</span>`).join(', ');
         const locals = vars.filter(([k]) => !params.has(k)).map(([k, v]) =>
-          `<div class="var"><span class="k">${esc(k)}</span><span class="v">${v === undefined ? '<i>sin valor</i>' : esc(shortValue(v))}</span></div>`
+          `<div class="var"><span class="k">${esc(k)}</span><span class="v">${v === undefined ? '<i>sin valor</i>' : esc(localValue(v))}</span></div>`
         ).join('');
         const ret = f.returned ? `<div class="ret">↩ ${esc(shortValue(f.result))}</div>` : '';
         const where = f.lib ? 'incluida' : `L${f.line ?? '?'}`;
@@ -588,6 +816,11 @@ const Runner = (() => {
     }
     const globals = [];
     if (it.arbol) globals.push(['arbol', it.arbol instanceof JSInterp.JInstance ? it.arbol.cls.name : 'objeto'], ['arbol.raiz', shortValue(it.getRoot())]);
+    if (it.grafo) {
+      const list = it.grafo.props.get('vertices');
+      const n = list instanceof JList ? list.items.length : Array.isArray(list) ? list.length : '?';
+      globals.push(['grafo', it.grafo instanceof JSInterp.JInstance ? it.grafo.cls.name : 'objeto'], ['vértices', n]);
+    }
     for (const [k, en] of it.stack[0]?.env.vars ?? []) {
       if (!['function', 'class', 'this', 'hidden'].includes(en.kind)) globals.push([k, shortValue(en.v)]);
     }
@@ -602,22 +835,36 @@ const Runner = (() => {
     if (session?.status === 'done') {
       html += `<div class="c-result"><span class="c-call">› ${esc(session.callText)}</span><span class="c-val">← ${esc(resultText(session.result))}</span></div>`;
       const g = session.graph;
-      const lost = session.result instanceof JNode && !g.main.has(session.result.id) && !session.assignsRoot;
+      const lost = session.space === 'tree' && session.result instanceof JNode && !g.main.has(session.result.id) && !session.assignsRoot;
       if (lost) {
         const target = session.callText.startsWith('arbol.') ? 'arbol.raiz' : 'raiz';
         html += `<div class="c-note">Se devolvió un nodo que no quedó colgado de <b>${target}</b>. Si es la nueva raíz, ejecutá <code>${target} = ${esc(session.callText)}</code>.</div>`;
       }
-      if (session.mutated) html += '<div class="c-note">El árbol cambió. Con Ctrl/⌘+Z volvés a como estaba.</div>';
+      html += graphNotes();
+      if (session.mutated) html += `<div class="c-note">${session.space === 'graph' ? 'El grafo' : 'El árbol'} cambió. Con Ctrl/⌘+Z volvés a como estaba.</div>`;
     }
     if (session?.status === 'error') {
       const where = session.errorInCall ? 'en la línea de ejecución'
         : session.errorInLib ? 'dentro de una clase incluida (revisá los datos que le pasás)'
         : `en la línea ${session.error.line ?? '?'}`;
       html += `<div class="c-error"><b>Error ${where}</b><br>${esc(session.error.message)}</div>`;
-      if (session.mutated) html += '<div class="c-note">El árbol quedó como estaba al momento del error. Con Ctrl/⌘+Z volvés al original.</div>';
+      if (session.mutated) html += `<div class="c-note">${session.space === 'graph' ? 'El grafo' : 'El árbol'} quedó como estaba al momento del error. Con Ctrl/⌘+Z volvés al original.</div>`;
     }
     consoleEl.innerHTML = html || '<div class="c-empty">Acá aparecen los console.log y el resultado.</div>';
     consoleEl.scrollTop = consoleEl.scrollHeight;
+  }
+
+  /** Avisos sobre el grafo que quedó: aristas de un solo sentido, vértices fuera de la lista. */
+  function graphNotes() {
+    if (session.space !== 'graph') return '';
+    let html = '';
+    const oneWay = [...session.edgeWarn.values()].filter(w => w.oneWay).length;
+    const other = session.edgeWarn.size - oneWay;
+    if (oneWay) html += `<div class="c-note">${oneWay === 1 ? 'Una arista quedó' : `${oneWay} aristas quedaron`} en un solo sentido (con flecha naranja): en un grafo no dirigido cada arista va en la lista de adyacentes de sus dos vértices.</div>`;
+    if (other) html += `<div class="c-note">Hay aristas repetidas o con pesos distintos de ida y vuelta (en naranja): pasá el mouse por encima para ver el detalle.</div>`;
+    const lostV = session.graph.nodes.filter(v => !session.graph.main.has(v.id));
+    if (lostV.length) html += `<div class="c-note">${lostV.map(v => `«${esc(fmt(v.dato))}»`).join(', ')} ${lostV.length === 1 ? 'no está' : 'no están'} en <b>grafo.vertices</b>, pero todavía hay aristas que llegan ${lostV.length === 1 ? 'a él' : 'a ellos'} (línea punteada).</div>`;
+    return html;
   }
 
   function renderControls() {
@@ -636,7 +883,7 @@ const Runner = (() => {
     langButtons.forEach(b => { b.disabled = active; });
     document.querySelectorAll('.fn-chip').forEach(b => { b.disabled = active; });
     if (!session) runInfo.textContent = '';
-    else if (st === 'done') runInfo.textContent = `Terminó en ${session.steps.toLocaleString('es')} pasos`;
+    else if (st === 'done') runInfo.textContent = `Terminó en ${session.steps.toLocaleString('es')} ${session.steps === 1 ? 'paso' : 'pasos'}`;
     else if (st === 'error') runInfo.textContent = 'Terminó con error';
     else if (st !== 'fast') {
       const top = topFrame();
@@ -652,11 +899,16 @@ const Runner = (() => {
   });
 
   // ---------- ejercicios ----------
-  for (const group of [...new Set(EXERCISES.map(x => x.group))]) {
-    const og = document.createElement('optgroup');
-    og.label = group;
-    for (const ex of EXERCISES.filter(x => x.group === group)) og.append(new Option(ex.name, ex.id));
-    selCode.append(og);
+  /** El selector muestra los ejercicios del espacio actual (árbol o grafo). */
+  function renderExerciseOptions() {
+    const list = EXERCISES.filter(x => Exercise.space(x) === space());
+    selCode.replaceChildren(...[...new Set(list.map(x => x.group))].map(group => {
+      const og = document.createElement('optgroup');
+      og.label = group;
+      for (const ex of list.filter(x => x.group === group)) og.append(new Option(ex.name, ex.id));
+      return og;
+    }));
+    callInput.placeholder = isGraphSpace() ? 'bfs(grafo, 1)' : 'arbol.altura()';
   }
 
   /** Guarda tu código del ejercicio actual antes de cambiar de ejercicio, lenguaje o vista. */
@@ -685,10 +937,11 @@ const Runner = (() => {
     clearSession();
     saveDraft();
     exercise = ex;
+    lastExercise[Exercise.space(ex)] = ex.id;
     viewingSolution = false;
     selCode.value = ex.id;
     treeClassSel.value = '__auto';
-    callInput.value = Exercise.call(ex, lang);
+    setDefaultCall();
     showCode();
   }
   selCode.addEventListener('change', () => loadExercise(selCode.value));
@@ -697,10 +950,10 @@ const Runner = (() => {
     if (next === lang || isActive()) return;
     clearSession();
     saveDraft();
-    const prevCall = exercise ? Exercise.call(exercise, lang) : null;
+    const wasDefault = callInput.value.trim() === autoCall;
     lang = next;
     langButtons.forEach(b => b.setAttribute('aria-checked', String(b.dataset.lang === lang)));
-    if (callInput.value.trim() === prevCall) callInput.value = Exercise.call(exercise, lang);
+    if (wasDefault) setDefaultCall();
     showCode();
   }
   langButtons.forEach(b => b.addEventListener('click', () => setLang(b.dataset.lang)));
@@ -727,6 +980,8 @@ const Runner = (() => {
     return {
       exercise,
       lang,
+      space: space(),
+      fillCall,
       program: mine,
       parseErr: viewingSolution ? null : parseErr,
       goTo: line => {
@@ -750,13 +1005,96 @@ const Runner = (() => {
   }
   $('#btnGuide').addEventListener('click', () => { if (!viewingSolution) parseNow(); Guide.open(guideContext()); });
 
-  loadExercise('ab');
+  renderExerciseOptions();
+  loadExercise(lastExercise[space()]);
   renderConsole();
   renderControls();
+
+  /** Valor corto para las etiquetas del dibujo (∞ para Infinity o Integer.MAX_VALUE). */
+  function badgeValue(v) {
+    if (v === Infinity || v === 2147483647) return '∞';
+    if (v === null) return '—';
+    if (v instanceof JVertex) return fmt(v.dato);
+    const s = typeof v === 'string' ? v : fmt(v, 1, false);
+    return s.length > 10 ? s.slice(0, 9) + '…' : s;
+  }
+
+  /**
+   * Lo que se marca sobre el grafo: el vértice en foco y los de llamadas pendientes, los visitados
+   * (campo visitado, o un conjunto llamado «visitados»), los que están en una cola o pila, y las
+   * colecciones del frame actual como etiquetas (dist 3, cola[0], ∈ enCurso…).
+   */
+  function graphOverlay() {
+    const it = session.interp;
+    const g = session.graph;
+    const running = session.status !== 'done';
+    const top = topFrame();
+    // Vértice actual: el que el código está procesando (actual, v, vertice…) o, si no hay, el de la llamada.
+    let cur = null;
+    if (running && top && !top.isMain) {
+      for (const [k, v] of it.frameVars(top)) if (CURRENT_VAR.test(k)) cur = vertexFor(v) ?? cur;
+      cur ??= focusOf(top);
+    }
+    const stack = new Set();
+    if (running) for (const f of it.stack.slice(0, -1)) { const v = focusOf(f); if (v) stack.add(v.id); }
+    // Visitado = lo que el algoritmo marcó (campo visitado o un conjunto «visitados»), no por dónde pasó cada llamada.
+    const visited = new Set();
+    for (const v of g.nodes) if (v.visitado) visited.add(v.id);
+    const pointers = new Map(), badges = new Map(), queued = new Set(), edgeMarks = new Set();
+    const push = (map, id, text) => {
+      if (!map.has(id)) map.set(id, []);
+      if (!map.get(id).includes(text)) map.get(id).push(text);
+    };
+    const collection = (name, v) => {
+      if (v instanceof JMap) {
+        if (v.map.size > 200) return;
+        for (const [k, x] of v.map) {
+          const hit = vertexFor(k);
+          if (hit) push(badges, hit.id, `${name} ${badgeValue(x)}`);
+        }
+        return;
+      }
+      const items = v instanceof JList ? v.items : Array.isArray(v) ? v : v instanceof JSet ? [...v.set] : null;
+      if (!items || items.length > 200) return;
+      items.forEach((x, i) => {
+        const hit = vertexFor(x);
+        if (!hit) return;
+        if (VISITED_VAR.test(name)) visited.add(hit.id);
+        else if (v instanceof JSet) push(badges, hit.id, `∈ ${name}`);
+        else push(badges, hit.id, `${name}[${i}]`);
+        if (QUEUE_VAR.test(name)) queued.add(hit.id);
+      });
+    };
+    if (running && top && !top.isMain) {
+      for (const [k, v] of it.frameVars(top)) {
+        if (v instanceof JVertex) push(pointers, v.id, k);
+        else if (v instanceof JEdge) { const key = session.edgeOf.get(v); if (key) edgeMarks.add(key); }
+        else if ((typeof v === 'number' || typeof v === 'string') && VERTEX_VAR.test(k)) { const hit = vertexFor(v); if (hit) push(pointers, hit.id, k); }
+        else collection(k, v);
+      }
+    }
+    // Al terminar: si devolvió vértices en orden (un recorrido), se numeran; si devolvió un mapa, se muestra.
+    let order = null;
+    const res = session.status === 'done' ? session.result : undefined;
+    if (res instanceof JMap) {
+      for (const [k, x] of res.map) { const hit = vertexFor(k); if (hit) push(badges, hit.id, `↩ ${badgeValue(x)}`); }
+    } else if (res instanceof JList || Array.isArray(res)) {
+      const items = res instanceof JList ? res.items : res;
+      const hits = items.map(vertexFor);
+      if (items.length && hits.every(Boolean) && new Set(hits).size === hits.length) order = new Map(hits.map((h, i) => [h.id, i + 1]));
+    }
+    const floating = new Set(g.nodes.filter(v => !g.main.has(v.id)).map(v => v.id));
+    return {
+      // Los ↩ de cada llamada sirven mientras corre; al final el resultado ya está en la consola.
+      current: cur?.id ?? null, stack, visited, queued, returns: running ? session.returns : new Map(), pointers, badges, order, floating,
+      result: session.resultNode, edgeWarn: session.edgeWarn, edgeMarks,
+    };
+  }
 
   return {
     overlay() {
       if (!session) return null;
+      if (session.space === 'graph') return graphOverlay();
       const it = session.interp;
       const running = session.status !== 'done';
       const top = topFrame();
@@ -787,9 +1125,20 @@ const Runner = (() => {
       for (const n of session.graph?.nodes ?? []) alturas.set(n.id, { stored: n.altura, real: h(n) });
       return { current: cur?.id ?? null, stack, visited: session.visited, returns: session.returns, pointers, floating, result: session.resultNode, alturas };
     },
+    onSpaceChange() {
+      if (session) stop();
+      clearSession();
+      saveDraft();
+      renderExerciseOptions();
+      viewingSolution = false;
+      exercise = null;
+      loadExercise(lastExercise[space()]);
+      renderControls();
+    },
     onModeChange(mode) {
       if (mode === 'draw' && session) stop();
       if (mode === 'code') {
+        refreshDefaultCall();
         parseNow();
         renderTreeClasses();
         editor.setMarks({ error: parseErr?.line ?? null });

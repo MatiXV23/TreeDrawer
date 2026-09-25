@@ -235,8 +235,8 @@ const JavaParser = (() => {
       let parent = null;
       if (eat('extends')) parent = parseType().base;
       if (eat('implements')) { do { parseType(); } while (eat(',')); }
-      if (NODE_CLASSES.has(nameTok.value)) {
-        // La clase Nodo la provee el entorno (conectada al dibujo).
+      if (BUILTIN_CLASSES.has(nameTok.value)) {
+        // Nodo, Vertice y Arista los provee el entorno (conectados al dibujo).
         skipBalanced('{', '}');
         return { t: 'empty', line: tok.line };
       }

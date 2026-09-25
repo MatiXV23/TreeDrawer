@@ -7,6 +7,10 @@
 
 /** Nombres de clase que se interpretan como el nodo del árbol dibujado. */
 const NODE_CLASSES = new Set(['Nodo', 'NodoArbol', 'NodoAB', 'NodoABB', 'NodoAVL', 'NodoAG', 'Node', 'TreeNode']);
+const VERTEX_CLASSES = new Set(['Vertice', 'Vertex']);
+const EDGE_CLASSES = new Set(['Arista', 'Edge']);
+/** Clases que provee el entorno (conectadas al dibujo): si el código las define, se ignoran. */
+const BUILTIN_CLASSES = new Set([...NODE_CLASSES, ...VERTEX_CLASSES, ...EDGE_CLASSES]);
 
 const JSParser = (() => {
   class SyntaxErr extends Error {
@@ -301,8 +305,8 @@ const JSParser = (() => {
       const nameTok = expectId('nombre de la clase');
       let parent = null;
       if (eat('extends')) parent = expectId('nombre de la clase padre').value;
-      if (NODE_CLASSES.has(nameTok.value)) {
-        // La clase Nodo la provee el entorno (conectada al dibujo): se ignora su definición.
+      if (BUILTIN_CLASSES.has(nameTok.value)) {
+        // Nodo, Vertice y Arista los provee el entorno (conectados al dibujo): se ignora su definición.
         skipBalanced();
         return { t: 'empty', line: tok.line };
       }

@@ -31,6 +31,39 @@ const JSInterp = (() => {
       this.hijos = general ? [] : null;
     }
   }
+  /** Vértice de un grafo (clase Vertice incluida): dato, lista de aristas salientes y marca de visitado. */
+  class JVertex {
+    constructor(id, dato) {
+      this.id = id;
+      this.dato = dato;
+      this.adyacentes = null;
+      this.visitado = false;
+    }
+  }
+  /** Arista de la lista de adyacencia (clase Arista incluida): vértice destino y peso. */
+  class JEdge {
+    constructor(destino, peso) { this.destino = destino; this.peso = peso; }
+  }
+  /** Map de JavaScript (kind 'js') o HashMap / LinkedHashMap / TreeMap de Java. */
+  class JMap {
+    constructor(kind) { this.kind = kind; this.map = new Map(); }
+  }
+  /** Set de JavaScript (kind 'js') o HashSet / LinkedHashSet / TreeSet de Java. */
+  class JSet {
+    constructor(kind, items = []) { this.kind = kind; this.set = new Set(items); }
+  }
+  /** Map.Entry de Java (lo que devuelve entrySet()). */
+  class JEntry {
+    constructor(owner, key) { this.owner = owner; this.key = key; }
+  }
+  /** Orden natural de Java (compareTo) para TreeMap / TreeSet / Collections.sort. */
+  const natural = (a, b) => {
+    if (typeof a === 'number' && typeof b === 'number') return a - b;
+    const x = String(a), y = String(b);
+    return x < y ? -1 : x > y ? 1 : 0;
+  };
+  const mapKeys = m => (m.kind === 'tree' ? [...m.map.keys()].sort(natural) : [...m.map.keys()]);
+  const setItems = st => (st.kind === 'tree' ? [...st.set].sort(natural) : [...st.set]);
   class JObject {
     constructor(entries = []) { this.props = new Map(entries); }
   }
@@ -104,7 +137,7 @@ const JSInterp = (() => {
   }
   /** Colección de Java (ArrayList, LinkedList, ArrayDeque, Stack). */
   class JList {
-    constructor(kind, items = []) { this.kind = kind; this.items = items; this.readonly = false; this.hijosOf = null; }
+    constructor(kind, items = []) { this.kind = kind; this.items = items; this.readonly = false; this.hijosOf = null; this.adjOf = null; this.vertsOf = null; }
   }
   const INT_TYPES = new Set(['int', 'long', 'short', 'byte']);
   const javaDefault = t => (INT_TYPES.has(t) || t === 'double' || t === 'float' ? 0 : t === 'boolean' ? false : t === 'char' ? '\0' : null);
@@ -135,6 +168,16 @@ const JSInterp = (() => {
     altura: 'altura', height: 'altura',
   };
   const FIELD_HELP = 'dato, izq, der y altura (también valor/clave, izquierdo/left, derecho/right; hijos para árboles generales)';
+  const VERTEX_FIELD = {
+    dato: 'dato', valor: 'dato', info: 'dato', elemento: 'dato', value: 'dato', data: 'dato', etiqueta: 'dato', clave: 'dato',
+    adyacentes: 'adyacentes', aristas: 'adyacentes', adj: 'adyacentes', edges: 'adyacentes',
+    visitado: 'visitado', marcado: 'visitado', visited: 'visitado',
+  };
+  const EDGE_FIELD = { destino: 'destino', dest: 'destino', hasta: 'destino', to: 'destino', peso: 'peso', costo: 'peso', weight: 'peso', w: 'peso' };
+  const VERTEX_HELP = 'Tienen dato, adyacentes (sus aristas) y visitado; en Java, getDato/setDato, getAdyacentes e isVisitado/setVisitado.';
+  const EDGE_HELP = 'Tienen destino (un Vertice) y peso; en Java, getDestino/setDestino y getPeso/setPeso.';
+  const MAP_KINDS = { HashMap: 'hash', LinkedHashMap: 'linked', TreeMap: 'tree', Hashtable: 'hash' };
+  const SET_KINDS = { HashSet: 'hash', LinkedHashSet: 'linked', TreeSet: 'tree' };
   const NODE_METHODS = {
     getDato: 'valor', getValor: 'valor', getIzq: 'izq', getDer: 'der', getAltura: 'altura', getHijos: 'hijos',
     setDato: 'valor', setValor: 'valor', setIzq: 'izq', setDer: 'der', setAltura: 'altura',
@@ -174,11 +217,27 @@ const JSInterp = (() => {
     if (typeof v === 'number') return Object.is(v, -0) ? '0' : String(v);
     if (typeof v === 'boolean') return String(v);
     if (v instanceof JNode) return `Nodo(${fmt(v.valor, 0, false)})`;
+    if (v instanceof JVertex) return `V(${fmt(v.dato)})`;
+    if (v instanceof JEdge) return `Arista(→${v.destino instanceof JVertex ? fmt(v.destino.dato) : fmt(v.destino, 1, false)}, ${fmt(v.peso)})`;
     if (v instanceof JFunction) return `ƒ ${v.name || 'anónima'}`;
     if (v instanceof NativeFn) return `ƒ ${v.name}`;
     if (v instanceof JError) return `${v.name}: ${v.message}`;
     if (v instanceof JClass) return `class ${v.name}`;
-    if (v instanceof JList) return fmt(v.items, depth, false);
+    // Colecciones de Java: se muestran como en Java, [a, b] y {k=v}; las de JavaScript, como en la consola.
+    const jitem = x => (typeof x === 'string' ? x : fmt(x, depth + 1, false));
+    const some = (arr, f) => (depth > 2 ? ['…'] : [...arr.slice(0, 30).map(f), ...(arr.length > 30 ? [`… ${arr.length - 30} más`] : [])]);
+    if (v instanceof JList) return `[${some(v.items, jitem).join(', ')}]`;
+    if (v instanceof JMap) {
+      const keys = mapKeys(v);
+      if (v.kind === 'js') return `Map(${keys.length}) {${some(keys, k => `${fmt(k, depth + 1, false)} => ${fmt(v.map.get(k), depth + 1, false)}`).join(', ')}}`;
+      return `{${some(keys, k => `${jitem(k)}=${jitem(v.map.get(k))}`).join(', ')}}`;
+    }
+    if (v instanceof JSet) {
+      const items = setItems(v);
+      if (v.kind === 'js') return `Set(${items.length}) {${some(items, x => fmt(x, depth + 1, false)).join(', ')}}`;
+      return `[${some(items, jitem).join(', ')}]`;
+    }
+    if (v instanceof JEntry) return `${jitem(v.key)}=${jitem(v.owner.map.get(v.key))}`;
     if (v instanceof JInstance && depth > 1) return v.cls.name;
     if (v instanceof JInstance) {
       const items = [...v.props].slice(0, 8).map(([k, x]) => `${k}: ${fmt(x, depth + 1, false)}`);
@@ -198,7 +257,7 @@ const JSInterp = (() => {
   }
 
   class Interpreter {
-    constructor(program, { root, general, allocId, onMutate, treeClass = null, maxDepth = 200 }) {
+    constructor(program, { root = null, general = false, allocId, onMutate, treeClass = null, graph = null, maxDepth = 200 }) {
       this.program = program;
       this.general = general;
       this.allocId = allocId;
@@ -207,6 +266,11 @@ const JSInterp = (() => {
       this.maxDepth = maxDepth;
       this.initialRoot = root;
       this.arbol = null;
+      // Modo grafo: `graph` = { vertices: [{ id, dato, ady: [{ to, w }] }], directed }.
+      this.graphSpec = graph;
+      this.grafo = null;
+      this.adjArrays = new WeakSet();
+      this.vertArrays = new WeakSet();
       this.silent = false;
       this.global = new Env(null);
       this.stack = [];
@@ -244,7 +308,8 @@ const JSInterp = (() => {
       this.hoist(this.program.body, this.global);
       this.defineClasses(this.program.body.filter(s => s.t === 'classdecl'), this.global);
       for (const s of this.program.body) if (s.t === 'var') yield* this.execVar(s, this.global);
-      this.createArbol();
+      if (this.graphSpec) this.createGrafo();
+      else this.createArbol();
       const env = new Env(this.global);
       main.env = env;
       main.baseEnv = env;
@@ -310,6 +375,72 @@ const JSInterp = (() => {
       arbol.props.set('raiz', this.initialRoot);
       this.arbol = arbol;
       this.global.vars.set('arbol', { v: arbol, kind: 'const' });
+    }
+
+    /** Crea `grafo` (instancia de la clase elegida, o un objeto) con los vértices y aristas dibujados. */
+    createGrafo() {
+      const spec = this.graphSpec;
+      const byId = new Map(spec.vertices.map(x => [x.id, this.makeVertex(x.id, x.dato)]));
+      for (const x of spec.vertices) {
+        const ady = this.adjItems(byId.get(x.id));
+        for (const a of x.ady) ady.push(new JEdge(byId.get(a.to), a.w));
+      }
+      const list = this.java ? new JList('list', [...byId.values()]) : [...byId.values()];
+      this.markVertices(list);
+      const cls = this.treeClass ? this.findEntry(this.treeClass, this.global)?.en.v : null;
+      let grafo;
+      if (cls instanceof JClass) {
+        grafo = new JInstance(cls);
+        const args = cls.ctors.some(f => arityOk(f, 1)) ? [spec.directed] : [];
+        this.silent = true;
+        try {
+          const g = this.construct(cls, grafo, args, { line: cls.decl.line, txt: `new ${cls.name}(${args.join('')})` });
+          while (!g.next().done);
+        } finally {
+          this.silent = false;
+        }
+        this.stack.length = 1;
+      } else {
+        grafo = new JObject();
+      }
+      grafo.props.set('vertices', list);
+      grafo.props.set('dirigido', spec.directed);
+      this.grafo = grafo;
+      this.global.vars.set('grafo', { v: grafo, kind: 'const' });
+    }
+
+    makeVertex(id, dato) {
+      const v = new JVertex(id, dato);
+      v.adyacentes = this.markAdj(v, this.java ? new JList('list') : []);
+      return v;
+    }
+
+    /** Marca una lista como «adyacentes de v»: solo acepta aristas y sus cambios se ven en el dibujo. */
+    markAdj(v, list) {
+      if (list instanceof JList) list.adjOf = v;
+      else if (Array.isArray(list)) this.adjArrays.add(list);
+      return list;
+    }
+
+    markVertices(list) {
+      if (list instanceof JList) list.vertsOf = true;
+      else if (Array.isArray(list)) this.vertArrays.add(list);
+    }
+
+    adjItems(v) {
+      const a = v.adyacentes;
+      return a instanceof JList ? a.items : Array.isArray(a) ? a : [];
+    }
+
+    checkEdge(x, e) {
+      if (x instanceof JEdge) return;
+      const hint = x instanceof JVertex ? ' Para conectar con ese vértice creá la arista: new Arista(vertice, peso).' : ' Creala con new Arista(destino, peso).';
+      throw new RuntimeErr(`TypeError: la lista de adyacentes guarda aristas (Arista), no ${fmt(x, 0, false)}.${hint}`, e, 'TypeError');
+    }
+
+    checkVertex(x, e) {
+      if (x instanceof JVertex) return;
+      throw new RuntimeErr(`TypeError: la lista de vértices guarda objetos Vertice, no ${fmt(x, 0, false)}. Crealo con new Vertice(dato).`, e, 'TypeError');
     }
 
     hoist(stmts, env) {
@@ -587,6 +718,10 @@ const JSInterp = (() => {
           const v = yield* this.eval(e.left, env);
           const tn = e.typeName;
           if (NODE_CLASSES.has(tn)) return v instanceof JNode;
+          if (VERTEX_CLASSES.has(tn)) return v instanceof JVertex;
+          if (EDGE_CLASSES.has(tn)) return v instanceof JEdge;
+          if (tn === 'Map' || MAP_KINDS[tn]) return v instanceof JMap && (tn === 'Map' || MAP_KINDS[tn] === v.kind);
+          if (tn === 'Set' || SET_KINDS[tn]) return v instanceof JSet && (tn === 'Set' || SET_KINDS[tn] === v.kind);
           if (tn === 'String') return typeof v === 'string';
           if (['Integer', 'Double', 'Long', 'Number'].includes(tn)) return typeof v === 'number';
           if (tn === 'Boolean') return typeof v === 'boolean';
@@ -750,6 +885,10 @@ const JSInterp = (() => {
         case 'instanceof':
           if (b instanceof JClass) return a instanceof JInstance && a.cls.extendsFrom(b);
           if (b instanceof NativeFn && b.name === 'Nodo') return a instanceof JNode;
+          if (b instanceof NativeFn && b.name === 'Vertice') return a instanceof JVertex;
+          if (b instanceof NativeFn && b.name === 'Arista') return a instanceof JEdge;
+          if (b instanceof NativeFn && b.name === 'Map') return a instanceof JMap;
+          if (b instanceof NativeFn && b.name === 'Set') return a instanceof JSet;
           if (b instanceof NativeFn && b.name === 'Array') return Array.isArray(a);
           throw new RuntimeErr('instanceof no está soportado.', e);
         case '+':
@@ -775,7 +914,7 @@ const JSInterp = (() => {
       if (v instanceof JError) return `${v.name}: ${v.message}`;
       if (v instanceof JFunction || v instanceof NativeFn) return `function ${v.name || ''}`;
       if (v instanceof JClass) return `class ${v.name}`;
-      if (v instanceof JList) return fmt(v, 0, false);
+      if (v instanceof JList || v instanceof JMap || v instanceof JSet || v instanceof JEntry || v instanceof JVertex || v instanceof JEdge) return fmt(v, 0, false);
       if (v instanceof JInstance) return this.java ? `${v.cls.name}@${v.cls.name.length.toString(16)}` : `[object ${v.cls.name}]`;
       return '[object Object]';
     }
@@ -809,12 +948,20 @@ const JSInterp = (() => {
       if (type === 'String') { if (v !== null && typeof v !== 'string') throw bad('un String'); return v; }
       if (['Integer', 'Long', 'Double'].includes(type)) { if (v !== null && typeof v !== 'number') throw bad(`un ${type}`); return v; }
       if (NODE_CLASSES.has(type)) { if (v !== null && !(v instanceof JNode)) throw bad(`un ${type}`); return v; }
+      if (VERTEX_CLASSES.has(type)) { if (v !== null && !(v instanceof JVertex)) throw bad(`un ${type}${typeof v !== 'object' ? ' (para obtener el vértice de un dato usá buscarVertice)' : ''}`); return v; }
+      if (EDGE_CLASSES.has(type)) { if (v !== null && !(v instanceof JEdge)) throw bad(`una ${type}`); return v; }
       return v;
     }
 
     iterable(v, node) {
       if (Array.isArray(v)) return v;
       if (v instanceof JList) return v.items;
+      if (v instanceof JSet) return setItems(v);
+      if (v instanceof JMap) {
+        if (!this.java) return mapKeys(v).map(k => [k, v.map.get(k)]);
+        throw new RuntimeErr(`«${node.txt}» es un Map y no se recorre directamente: usá ${node.txt}.keySet(), ${node.txt}.values() o ${node.txt}.entrySet().`, node, 'TypeError');
+      }
+      if (v instanceof JVertex) throw new RuntimeErr(`TypeError: un vértice no se recorre. ¿Quisiste recorrer sus aristas (${this.java ? `${node.txt}.getAdyacentes()` : `${node.txt}.adyacentes`})?`, node, 'TypeError');
       if (typeof v === 'string') return [...v];
       if (v instanceof JNode) throw new RuntimeErr(`TypeError: un nodo no se puede recorrer. ¿Quisiste usar ${node.txt}.hijos?`, node, 'TypeError');
       throw new RuntimeErr(`TypeError: «${node.txt}» (${fmt(v, 0, false)}) no se puede recorrer.`, node, 'TypeError');
@@ -833,6 +980,14 @@ const JSInterp = (() => {
     getProp(obj, key, e) {
       if (obj === null || obj === undefined) throw this.nullError(obj, e, `leer .${key}`);
       if (obj instanceof JNode) return this.nodeGet(obj, key, e);
+      if (obj instanceof JVertex) return this.vertexGet(obj, key, e);
+      if (obj instanceof JEdge) return this.edgeGet(obj, key, e);
+      if (obj instanceof JMap || obj instanceof JSet) {
+        const what = obj instanceof JMap ? 'Map' : 'Set';
+        if (key === 'size' && !this.java) return obj instanceof JMap ? obj.map.size : obj.set.size;
+        if (key === 'size' || key === 'length') throw new RuntimeErr(`TypeError: para el tamaño de un ${what} usá ${this.java ? 'size()' : '.size (sin paréntesis)'}.`, e, 'TypeError');
+        return new NativeFn(`${what}.${key}`, function* (args, ce) { return yield* this.callMethod(obj, key, args, ce); }, { gen: true });
+      }
       if (Array.isArray(obj)) {
         if (key === 'length') return obj.length;
         if (typeof key === 'number' || /^\d+$/.test(key)) return obj[Number(key)];
@@ -866,16 +1021,25 @@ const JSInterp = (() => {
     setProp(obj, key, v, e) {
       if (obj === null || obj === undefined) throw this.nullError(obj, e, `asignar .${key}`);
       if (obj instanceof JNode) return this.nodeSet(obj, key, v, e);
+      if (obj instanceof JVertex) return this.vertexSet(obj, key, v, e);
+      if (obj instanceof JEdge) return this.edgeSet(obj, key, v, e);
+      if (obj instanceof JMap || obj instanceof JSet) throw new RuntimeErr(`TypeError: no se asignan campos a un ${obj instanceof JMap ? 'Map' : 'Set'}${obj instanceof JMap ? `: usá ${this.java ? 'put(clave, valor)' : 'set(clave, valor)'}` : ''}.`, e, 'TypeError');
       if (Array.isArray(obj)) {
         if (this.readonlyArrays.has(obj)) throw this.readonlyError(e);
         if (key === 'length') { obj.length = this.num(v, e, '='); return; }
         const i = Number(key);
         if (!Number.isInteger(i) || i < 0) throw new RuntimeErr(`TypeError: índice inválido ${fmt(key, 0, false)}.`, e, 'TypeError');
         if (this.hijosArrays.has(obj)) { this.checkChild(v, e); this.mut(); }
+        if (this.adjArrays.has(obj)) { this.checkEdge(v, e); this.mut(); }
+        if (this.vertArrays.has(obj)) { this.checkVertex(v, e); this.mut(); }
         obj[i] = v;
         return;
       }
       if (obj instanceof JInstance || obj instanceof JObject) {
+        if (key === 'vertices' && obj === this.grafo && obj.props.get('vertices') !== v) {
+          this.markVertices(v);
+          this.mut();
+        }
         if (key === 'raiz' && obj === this.arbol) {
           if (v !== null && !(v instanceof JNode)) {
             throw new RuntimeErr(`TypeError: la raíz tiene que ser un nodo o null, pero recibió ${fmt(v, 0, false)}.${v === undefined ? ' ¿La función que llamaste se olvidó del return?' : ''}`, e, 'TypeError');
@@ -976,6 +1140,189 @@ const JSInterp = (() => {
       return undefined;
     }
 
+    // ---------- grafos: Vertice y Arista ----------
+    vertexGet(v, key, e) {
+      const f = VERTEX_FIELD[key];
+      if (!f) throw new RuntimeErr(`TypeError: los vértices no tienen la propiedad «${key}». ${VERTEX_HELP}`, e, 'TypeError');
+      return v[f];
+    }
+
+    vertexSet(v, key, val, e) {
+      const f = VERTEX_FIELD[key];
+      if (!f) throw new RuntimeErr(`TypeError: los vértices no tienen la propiedad «${key}». ${VERTEX_HELP}`, e, 'TypeError');
+      if (f === 'dato') {
+        if (typeof val !== 'number' && typeof val !== 'string') {
+          throw new RuntimeErr(`TypeError: el dato de un vértice tiene que ser un número o un texto (se recibió ${fmt(val, 0, false)}).`, e, 'TypeError');
+        }
+        this.mut();
+      } else if (f === 'adyacentes') {
+        if (val instanceof JList) val.items.forEach(x => this.checkEdge(x, e));
+        else if (Array.isArray(val)) val.forEach(x => this.checkEdge(x, e));
+        else throw new RuntimeErr(`TypeError: adyacentes tiene que ser una lista de aristas (se recibió ${fmt(val, 0, false)}).`, e, 'TypeError');
+        this.markAdj(v, val);
+        this.mut();
+      } else if (this.java && typeof val !== 'boolean') {
+        throw new RuntimeErr(`TypeError: visitado es boolean (se recibió ${fmt(val, 0, false)}).`, e, 'TypeError');
+      }
+      v[f] = val;
+    }
+
+    vertexMethod(v, key, args, e) {
+      const one = () => {
+        if (args.length !== 1) throw new RuntimeErr(`TypeError: ${key} recibe un argumento.`, e, 'TypeError');
+        return args[0];
+      };
+      switch (key) {
+        case 'getDato': case 'getValor': case 'getInfo': case 'getElemento': return v.dato;
+        case 'setDato': case 'setValor': this.vertexSet(v, 'dato', one(), e); return undefined;
+        case 'getAdyacentes': case 'getAristas': return v.adyacentes;
+        case 'setAdyacentes': case 'setAristas': this.vertexSet(v, 'adyacentes', one(), e); return undefined;
+        case 'isVisitado': case 'getVisitado': case 'estaVisitado': case 'fueVisitado': case 'isMarcado': return v.visitado;
+        case 'setVisitado': case 'setMarcado': this.vertexSet(v, 'visitado', one(), e); return undefined;
+        case 'equals': return args[0] === v;
+        case 'hashCode': return parseInt(String(v.id).replace(/\D/g, ''), 10) || 0;
+        case 'toString': return this.str(v);
+      }
+      const extra = VERTEX_FIELD[key] ? ` (${e.callee.txt} es un campo: se usa sin paréntesis)` : '';
+      throw new RuntimeErr(`TypeError: los vértices no tienen el método «${key}»${extra}. ${VERTEX_HELP}`, e, 'TypeError');
+    }
+
+    edgeGet(a, key, e) {
+      const f = EDGE_FIELD[key];
+      if (!f) throw new RuntimeErr(`TypeError: las aristas no tienen la propiedad «${key}». ${EDGE_HELP}`, e, 'TypeError');
+      return a[f];
+    }
+
+    edgeSet(a, key, val, e) {
+      const f = EDGE_FIELD[key];
+      if (!f) throw new RuntimeErr(`TypeError: las aristas no tienen la propiedad «${key}». ${EDGE_HELP}`, e, 'TypeError');
+      if (f === 'destino' && !(val instanceof JVertex)) {
+        throw new RuntimeErr(`TypeError: el destino de una arista tiene que ser un Vertice (se recibió ${fmt(val, 0, false)}).`, e, 'TypeError');
+      }
+      if (f === 'peso' && (typeof val !== 'number' || Number.isNaN(val))) {
+        throw new RuntimeErr(`TypeError: el peso de una arista tiene que ser un número (se recibió ${fmt(val, 0, false)}).`, e, 'TypeError');
+      }
+      this.mut();
+      a[f] = val;
+    }
+
+    edgeMethod(a, key, args, e) {
+      switch (key) {
+        case 'getDestino': case 'getHasta': return a.destino;
+        case 'setDestino': this.edgeSet(a, 'destino', args[0], e); return undefined;
+        case 'getPeso': case 'getCosto': return a.peso;
+        case 'setPeso': case 'setCosto': this.edgeSet(a, 'peso', args[0], e); return undefined;
+        case 'equals': return args[0] === a;
+        case 'toString': return this.str(a);
+      }
+      const extra = EDGE_FIELD[key] ? ` (${e.callee.txt} es un campo: se usa sin paréntesis)` : '';
+      throw new RuntimeErr(`TypeError: las aristas no tienen el método «${key}»${extra}. ${EDGE_HELP}`, e, 'TypeError');
+    }
+
+    // ---------- Map / Set ----------
+    *mapMethod(m, key, args, e) {
+      const M = m.map;
+      const [a, b] = args;
+      if (m.kind === 'js') {
+        switch (key) {
+          case 'set': M.set(a, b); return m;
+          case 'get': return M.get(a);
+          case 'has': return M.has(a);
+          case 'delete': return M.delete(a);
+          case 'clear': M.clear(); return undefined;
+          case 'keys': return mapKeys(m);
+          case 'values': return mapKeys(m).map(k => M.get(k));
+          case 'entries': return mapKeys(m).map(k => [k, M.get(k)]);
+          case 'forEach': {
+            const fn = this.fnArg(a, e, key);
+            for (const k of mapKeys(m)) yield* this.callFunction(fn, [M.get(k), k, m], e);
+            return undefined;
+          }
+          case 'size': throw new RuntimeErr('TypeError: en JavaScript size es una propiedad: usá mapa.size (sin paréntesis).', e, 'TypeError');
+          case 'put': case 'containsKey': case 'getOrDefault':
+            throw new RuntimeErr(`TypeError: ${key} es de Java. En un Map de JavaScript: set(k, v), get(k), has(k) y delete(k).`, e, 'TypeError');
+        }
+        throw new RuntimeErr(`TypeError: los Map no tienen el método «${key}». Tienen set, get, has, delete, clear, keys, values, entries, forEach y la propiedad size.`, e, 'TypeError');
+      }
+      switch (key) {
+        case 'put': { const old = M.has(a) ? M.get(a) : null; M.set(a, b); return old; }
+        case 'get': return M.has(a) ? M.get(a) : null;
+        case 'getOrDefault': return M.has(a) ? M.get(a) : b;
+        case 'containsKey': return M.has(a);
+        case 'containsValue': return [...M.values()].includes(a);
+        case 'remove': { if (!M.has(a)) return null; const old = M.get(a); M.delete(a); return old; }
+        case 'putIfAbsent': { if (M.has(a) && M.get(a) !== null) return M.get(a); M.set(a, b); return null; }
+        case 'size': return M.size;
+        case 'isEmpty': return M.size === 0;
+        case 'clear': M.clear(); return undefined;
+        case 'keySet': return new JSet(m.kind === 'tree' ? 'tree' : 'linked', mapKeys(m));
+        case 'values': return new JList('list', mapKeys(m).map(k => M.get(k)));
+        case 'entrySet': return new JList('list', mapKeys(m).map(k => new JEntry(m, k)));
+        case 'firstKey': case 'lastKey': {
+          if (!M.size) throw new RuntimeErr(`NoSuchElementException: ${key}() de un mapa vacío.`, e, 'Error');
+          const ks = mapKeys(m);
+          return key === 'firstKey' ? ks[0] : ks[ks.length - 1];
+        }
+        case 'toString': return fmt(m, 0, false);
+        case 'equals': return a instanceof JMap && a.map.size === M.size && [...M].every(([k, v]) => a.map.has(k) && a.map.get(k) === v);
+        case 'set': case 'has':
+          throw new RuntimeErr(`TypeError: ${key} es de JavaScript. En Java: put(k, v), get(k), containsKey(k) y remove(k).`, e, 'TypeError');
+      }
+      throw new RuntimeErr(`TypeError: los Map no tienen el método «${key}». Tienen put, get, getOrDefault, containsKey, remove, size, isEmpty, keySet, values y entrySet.`, e, 'TypeError');
+    }
+
+    *setMethod(st, key, args, e) {
+      const S = st.set;
+      const [a] = args;
+      if (st.kind === 'js') {
+        switch (key) {
+          case 'add': S.add(a); return st;
+          case 'has': return S.has(a);
+          case 'delete': return S.delete(a);
+          case 'clear': S.clear(); return undefined;
+          case 'values': case 'keys': return setItems(st);
+          case 'forEach': {
+            const fn = this.fnArg(a, e, key);
+            for (const x of setItems(st)) yield* this.callFunction(fn, [x, x, st], e);
+            return undefined;
+          }
+          case 'size': throw new RuntimeErr('TypeError: en JavaScript size es una propiedad: usá conjunto.size (sin paréntesis).', e, 'TypeError');
+          case 'contains': throw new RuntimeErr('TypeError: contains es de Java. En un Set de JavaScript se usa has(x).', e, 'TypeError');
+        }
+        throw new RuntimeErr(`TypeError: los Set no tienen el método «${key}». Tienen add, has, delete, clear, values, forEach y la propiedad size.`, e, 'TypeError');
+      }
+      switch (key) {
+        case 'add': { if (S.has(a)) return false; S.add(a); return true; }
+        case 'contains': return S.has(a);
+        case 'remove': return S.delete(a);
+        case 'size': return S.size;
+        case 'isEmpty': return S.size === 0;
+        case 'clear': S.clear(); return undefined;
+        case 'addAll': { const n = S.size; this.iterable(a, e.args[0]).forEach(x => S.add(x)); return S.size !== n; }
+        case 'containsAll': return this.iterable(a, e.args[0]).every(x => S.has(x));
+        case 'removeAll': { const n = S.size; this.iterable(a, e.args[0]).forEach(x => S.delete(x)); return S.size !== n; }
+        case 'first': case 'last': {
+          if (!S.size) throw new RuntimeErr(`NoSuchElementException: ${key}() de un conjunto vacío.`, e, 'Error');
+          const xs = setItems(st);
+          return key === 'first' ? xs[0] : xs[xs.length - 1];
+        }
+        case 'toString': return fmt(st, 0, false);
+        case 'equals': return a instanceof JSet && a.set.size === S.size && [...S].every(x => a.set.has(x));
+        case 'has': throw new RuntimeErr('TypeError: has es de JavaScript. En Java se usa contains(x).', e, 'TypeError');
+      }
+      throw new RuntimeErr(`TypeError: los Set no tienen el método «${key}». Tienen add, contains, remove, size, isEmpty, clear y addAll.`, e, 'TypeError');
+    }
+
+    entryMethod(en, key, args, e) {
+      switch (key) {
+        case 'getKey': return en.key;
+        case 'getValue': return en.owner.map.get(en.key);
+        case 'setValue': { const old = en.owner.map.get(en.key); en.owner.map.set(en.key, args[0]); return old; }
+        case 'toString': return fmt(en, 0, false);
+      }
+      throw new RuntimeErr(`TypeError: Map.Entry no tiene el método «${key}». Tiene getKey(), getValue() y setValue(v).`, e, 'TypeError');
+    }
+
     // ---------- llamadas ----------
     *evalArgs(list, env) {
       const out = [];
@@ -1043,6 +1390,11 @@ const JSInterp = (() => {
       if (typeof obj === 'number') return this.numberMethod(obj, key, args, e);
       if (typeof obj === 'boolean' && this.java && key === 'equals') return obj === args[0];
       if (obj instanceof JNode) return this.nodeMethod(obj, key, args, e);
+      if (obj instanceof JVertex) return this.vertexMethod(obj, key, args, e);
+      if (obj instanceof JEdge) return this.edgeMethod(obj, key, args, e);
+      if (obj instanceof JMap) return yield* this.mapMethod(obj, key, args, e);
+      if (obj instanceof JSet) return yield* this.setMethod(obj, key, args, e);
+      if (obj instanceof JEntry) return this.entryMethod(obj, key, args, e);
       if (obj instanceof JInstance) {
         const own = obj.props.get(String(key));
         let m = own instanceof JFunction || own instanceof NativeFn ? own : obj.cls.findMethod(String(key), this.java ? args.length : null, home);
@@ -1183,6 +1535,13 @@ const JSInterp = (() => {
           if (key === 'push' || key === 'unshift') args.forEach(x => this.checkChild(x, e));
           if (key === 'splice') args.slice(2).forEach(x => this.checkChild(x, e));
           if (key === 'fill') this.checkChild(args[0], e);
+          this.mut();
+        }
+        for (const [set, check] of [[this.adjArrays, this.checkEdge], [this.vertArrays, this.checkVertex]]) {
+          if (!set.has(arr)) continue;
+          if (key === 'push' || key === 'unshift') args.forEach(x => check.call(this, x, e));
+          if (key === 'splice') args.slice(2).forEach(x => check.call(this, x, e));
+          if (key === 'fill') check.call(this, args[0], e);
           this.mut();
         }
       }
@@ -1327,6 +1686,13 @@ const JSInterp = (() => {
           if (['add', 'addFirst', 'addLast', 'offer', 'push'].includes(key)) this.checkChild(args[args.length - 1], e);
           this.mut();
         }
+        if (list.adjOf || list.vertsOf) {
+          const check = (list.adjOf ? this.checkEdge : this.checkVertex).bind(this);
+          if (['add', 'addFirst', 'addLast', 'offer', 'push'].includes(key)) check(args[args.length - 1], e);
+          if (key === 'set') check(args[1], e);
+          if (key === 'addAll') this.iterable(x, e.args[0]).forEach(it2 => check(it2, e));
+          this.mut();
+        }
       }
       const empty = what => new RuntimeErr(`NoSuchElementException: ${what} de una colección vacía.`, e, 'Error');
       const index = i => {
@@ -1396,14 +1762,55 @@ const JSInterp = (() => {
         }
         return node;
       }
+      if (VERTEX_CLASSES.has(name)) {
+        const [dato] = args;
+        if (typeof dato !== 'number' && typeof dato !== 'string') {
+          throw new RuntimeErr(`TypeError: new ${name}(dato) necesita un número o un texto (se recibió ${fmt(dato, 0, false)}).`, e, 'TypeError');
+        }
+        this.mut();
+        return this.makeVertex(this.allocId(), dato);
+      }
+      if (EDGE_CLASSES.has(name)) {
+        const [destino, peso = 1] = args;
+        if (!(destino instanceof JVertex)) {
+          const hint = isPrim(destino) && destino !== null ? ' Si tenés el dato, buscá primero su vértice (buscarVertice).' : '';
+          throw new RuntimeErr(`TypeError: new ${name}(destino, peso) necesita un Vertice como destino (se recibió ${fmt(destino, 0, false)}).${hint}`, e, 'TypeError');
+        }
+        if (typeof peso !== 'number') throw new RuntimeErr(`TypeError: el peso de la arista tiene que ser un número (se recibió ${fmt(peso, 0, false)}).`, e, 'TypeError');
+        return new JEdge(destino, peso);
+      }
       const JAVA_COLLECTIONS = { ArrayList: 'list', LinkedList: 'linked', Vector: 'list', ArrayDeque: 'deque', Stack: 'stack' };
-      if (JAVA_COLLECTIONS[name]) {
+      if (this.java && JAVA_COLLECTIONS[name]) {
         const src = args[0];
-        const items = src instanceof JList ? [...src.items] : Array.isArray(src) ? [...src] : [];
+        const items = src === undefined || typeof src === 'number' ? [] : [...this.iterable(src, e.args[0])];
         return new JList(JAVA_COLLECTIONS[name], items);
       }
-      if (['List', 'Queue', 'Deque', 'Collection'].includes(name)) {
-        throw new RuntimeErr(`${name} es una interfaz: creá la colección con ${name === 'List' ? 'new ArrayList<>()' : 'new LinkedList<>()'}.`, e, 'TypeError');
+      if (this.java && MAP_KINDS[name]) {
+        const m = new JMap(MAP_KINDS[name]);
+        if (args[0] instanceof JMap) args[0].map.forEach((v, k) => m.map.set(k, v));
+        return m;
+      }
+      if (this.java && SET_KINDS[name]) {
+        const src = args[0];
+        return new JSet(SET_KINDS[name], src === undefined || typeof src === 'number' ? [] : this.iterable(src, e.args[0]));
+      }
+      if (!this.java && name === 'Map') {
+        const m = new JMap('js');
+        if (args[0] !== undefined && args[0] !== null) {
+          for (const pair of this.iterable(args[0], e.args[0])) {
+            if (!Array.isArray(pair)) throw new RuntimeErr('TypeError: new Map(...) espera una lista de pares [clave, valor].', e, 'TypeError');
+            m.map.set(pair[0], pair[1]);
+          }
+        }
+        return m;
+      }
+      if (!this.java && name === 'Set') return new JSet('js', args[0] === undefined || args[0] === null ? [] : this.iterable(args[0], e.args[0]));
+      if (this.java && ['List', 'Queue', 'Deque', 'Collection', 'Map', 'Set', 'SortedMap', 'SortedSet'].includes(name)) {
+        const make = { List: 'new ArrayList<>()', Map: 'new HashMap<>()', SortedMap: 'new TreeMap<>()', Set: 'new HashSet<>()', SortedSet: 'new TreeSet<>()' }[name] ?? 'new LinkedList<>()';
+        throw new RuntimeErr(`${name} es una interfaz: creá la colección con ${make}.`, e, 'TypeError');
+      }
+      if (this.java && name === 'PriorityQueue') {
+        throw new RuntimeErr('PriorityQueue no está soportada. Para Dijkstra o Prim buscá el mínimo recorriendo los vértices (como en el ejemplo correcto).', e, 'TypeError');
       }
       if (name === 'Array') {
         if (args.length === 1 && typeof args[0] === 'number') return new Array(args[0]).fill(undefined);
@@ -1411,7 +1818,7 @@ const JSInterp = (() => {
       }
       if (name === 'Object') return new JObject();
       if (/(Error|Exception)$/.test(name)) return new JError(name, args[0] === undefined ? '' : this.str(args[0]));
-      throw new RuntimeErr(this.java ? `No se puede usar new ${name}: la clase no existe (¿está bien escrita?).${this.suggest(name, env)}` : `No se puede usar new ${name}: solo Nodo, Array y Error.`, e);
+      throw new RuntimeErr(this.java ? `No se puede usar new ${name}: la clase no existe (¿está bien escrita?).${this.suggest(name, env)}` : `No se puede usar new ${name}: solo tus clases, Nodo, Vertice, Arista, Map, Set, Array y Error.`, e);
     }
 
     makeBuiltins() {
@@ -1451,6 +1858,16 @@ const JSInterp = (() => {
         ['min', nf('min', args => Math.min(args[0], args[1]))],
         ['toString', nf('toString', args => I.str(args[0]))],
       ]);
+      const listArg = (l, e, name) => {
+        if (!(l instanceof JList)) throw new RuntimeErr(`TypeError: Collections.${name} recibe una lista (se recibió ${fmt(l, 0, false)}).`, e, 'TypeError');
+        return l;
+      };
+      const extreme = (c, e, name, sign) => {
+        const xs = I.iterable(c, e.args?.[0] ?? e);
+        if (!xs.length) throw new RuntimeErr(`NoSuchElementException: Collections.${name} de una colección vacía.`, e, 'Error');
+        return xs.reduce((best, x) => (natural(x, best) * sign > 0 ? x : best));
+      };
+      const classFn = (name, hint) => nf(name, (args, e) => { throw new RuntimeErr(`TypeError: ${name} es una clase: se usa con new ${hint}.`, e, 'TypeError'); });
       const javaBuiltins = this.java ? [
         ['System', new JObject([['out', printStream], ['err', printStream]])],
         ['Integer', javaNum(2147483647, -2147483648, v => parseInt(I.str(v), 10))],
@@ -1459,11 +1876,21 @@ const JSInterp = (() => {
         ['List', new JObject([['of', nf('List.of', args => new JList('list', [...args]))]])],
         ['Arrays', new JObject([['asList', nf('Arrays.asList', args => new JList('list', [...args]))]])],
         ['Objects', new JObject([['equals', nf('Objects.equals', args => args[0] === args[1])], ['isNull', nf('Objects.isNull', args => args[0] === null)]])],
+        ['Collections', new JObject([
+          ['sort', nf('Collections.sort', (args, e) => { const l = listArg(args[0], e, 'sort'); l.items.sort(natural); })],
+          ['reverse', nf('Collections.reverse', (args, e) => { listArg(args[0], e, 'reverse').items.reverse(); })],
+          ['max', nf('Collections.max', (args, e) => extreme(args[0], e, 'max', 1))],
+          ['min', nf('Collections.min', (args, e) => extreme(args[0], e, 'min', -1))],
+          ['emptyList', nf('Collections.emptyList', () => new JList('list'))],
+        ])],
       ] : [];
       return new Map([
         ...javaBuiltins,
         ['Math', math],
-        ['Nodo', nf('Nodo', (args, e) => { throw new RuntimeErr('TypeError: Nodo es una clase: se usa con new Nodo(dato).', e, 'TypeError'); })],
+        ['Nodo', classFn('Nodo', 'Nodo(dato)')],
+        ['Vertice', classFn('Vertice', 'Vertice(dato)')],
+        ['Arista', classFn('Arista', 'Arista(destino, peso)')],
+        ...(this.java ? [] : [['Map', classFn('Map', 'Map()')], ['Set', classFn('Set', 'Set()')]]),
         ['console', consoleObj],
         ['Infinity', Infinity],
         ['NaN', NaN],
@@ -1486,6 +1913,10 @@ const JSInterp = (() => {
         ['Array', nf('Array', args => [...args], {
           isArray: nf('Array.isArray', args => Array.isArray(args[0])),
           of: nf('Array.of', args => [...args]),
+          from: nf('Array.from', (args, e) => {
+            if (args.length > 1) throw new RuntimeErr('Array.from con función no está soportado: usá Array.from(x).map(...).', e, 'TypeError');
+            return [...I.iterable(args[0], e.args?.[0] ?? e)];
+          }),
         })],
       ]);
     }
@@ -1506,6 +1937,8 @@ const JSInterp = (() => {
         seenVals.add(v);
         if (Array.isArray(v)) v.forEach(x => collect(x, depth + 1));
         else if (v instanceof JList) v.items.forEach(x => collect(x, depth + 1));
+        else if (v instanceof JMap) v.map.forEach((x, k) => { collect(k, depth + 1); collect(x, depth + 1); });
+        else if (v instanceof JSet) v.set.forEach(x => collect(x, depth + 1));
         else if (v instanceof JObject || v instanceof JInstance) v.props.forEach(x => collect(x, depth + 1));
       };
       const seenEnvs = new Set();
@@ -1561,16 +1994,63 @@ const JSInterp = (() => {
       return [...out].reverse();
     }
 
-    /** Nodo "en foco" de un frame: su primer parámetro que sea un nodo. */
+    /** Nodo "en foco" de un frame: su primer parámetro que sea un nodo (o un vértice). */
     frameNode(f) {
       if (!f.fn) return null;
       for (const p of f.fn.decl.params) {
         const v = f.baseEnv.vars.get(p.name)?.v;
-        if (v instanceof JNode) return v;
+        if (v instanceof JNode || v instanceof JVertex) return v;
       }
       return null;
     }
+
+    /**
+     * Estado del grafo para dibujarlo: los vértices de grafo.vertices, los que solo están en
+     * variables (sueltos) y los destinos de aristas que ya no están en la lista; y todas las aristas.
+     */
+    graphState() {
+      const g = this.grafo;
+      const list = g?.props.get('vertices');
+      const main = [];
+      for (const v of list instanceof JList ? list.items : Array.isArray(list) ? list : []) if (v instanceof JVertex && !main.includes(v)) main.push(v);
+      const candidates = [];
+      const seenVals = new Set();
+      const collect = (v, depth = 0) => {
+        if (v instanceof JVertex) { candidates.push(v); return; }
+        if (v instanceof JEdge) { if (v.destino instanceof JVertex) candidates.push(v.destino); return; }
+        if (depth > 4 || isPrim(v) || seenVals.has(v)) return;
+        seenVals.add(v);
+        if (Array.isArray(v)) v.forEach(x => collect(x, depth + 1));
+        else if (v instanceof JList) v.items.forEach(x => collect(x, depth + 1));
+        else if (v instanceof JMap) v.map.forEach((x, k) => { collect(k, depth + 1); collect(x, depth + 1); });
+        else if (v instanceof JSet) v.set.forEach(x => collect(x, depth + 1));
+        else if ((v instanceof JObject || v instanceof JInstance) && v !== g) v.props.forEach(x => collect(x, depth + 1));
+      };
+      const seenEnvs = new Set();
+      for (const f of this.stack) {
+        for (let s = f.env; s && !seenEnvs.has(s); s = s.parent) {
+          seenEnvs.add(s);
+          s.vars.forEach(en => collect(en.v));
+        }
+      }
+      this.inflight.forEach(v => collect(v));
+      const nodes = [];
+      const seen = new Set();
+      const add = v => { if (!seen.has(v)) { seen.add(v); nodes.push(v); } };
+      main.forEach(add);
+      candidates.forEach(add);
+      for (let i = 0; i < nodes.length; i++) {
+        for (const a of this.adjItems(nodes[i])) if (a instanceof JEdge && a.destino instanceof JVertex) add(a.destino);
+      }
+      const edges = [];
+      for (const v of nodes) {
+        for (const a of this.adjItems(v)) {
+          if (a instanceof JEdge && a.destino instanceof JVertex) edges.push({ from: v.id, to: a.destino.id, w: a.peso, edge: a });
+        }
+      }
+      return { nodes, edges, main: new Set(main.map(v => v.id)) };
+    }
   }
 
-  return { Interpreter, JNode, JObject, JFunction, JClass, JInstance, JList, NativeFn, RuntimeErr, fmt };
+  return { Interpreter, JNode, JVertex, JEdge, JMap, JSet, JObject, JFunction, JClass, JInstance, JList, NativeFn, RuntimeErr, fmt };
 })();

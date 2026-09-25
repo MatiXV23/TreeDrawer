@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <strong>Una aplicación didáctica para aprender árboles implementando y viendo cómo funcionan.</strong>
+  <strong>Una aplicación didáctica para aprender árboles y grafos implementando y viendo cómo funcionan.</strong>
 </p>
 
 <p align="center">
@@ -12,6 +12,8 @@
   <a href="#primeros-pasos">Primeros pasos</a>
   &nbsp; · &nbsp;
   <a href="#aprender-programando">Aprender programando</a>
+  &nbsp; · &nbsp;
+  <a href="#grafos">Grafos</a>
   &nbsp; · &nbsp;
   <a href="#ejecutar-en-local">Ejecutar en local</a>
 </p>
@@ -25,6 +27,8 @@
 Entender un árbol es más fácil cuando podés **construirlo, modificarlo y seguir cada paso de tu código**. TreeDrawer conecta la teoría de estructuras de datos con la práctica: dibujás un árbol, implementás funciones y observás cómo lo recorren o transforman.
 
 Está pensada para estudiantes y para quienes quieran practicar recursión, búsquedas, recorridos y balanceo con una referencia visual. La idea es que escribas tus propias soluciones y puedas comprender qué está pasando en cada nodo.
+
+Con el selector **Árbol | Grafo** de la barra superior pasás a trabajar con **grafos**: dirigidos o no, con pesos opcionales, y con sus propios ejercicios (BFS, DFS, Dijkstra, Prim y más). Cada espacio guarda su propio dibujo.
 
 | Dibujá y explorá | Programá y comprendé |
 | --- | --- |
@@ -136,15 +140,61 @@ Los nodos del dibujo llegan con `altura` calculada. En **Programar**, al activar
 
 La aplicación interpreta un subconjunto de cada lenguaje para poder mostrar la ejecución paso a paso. Ambos comparten el mismo intérprete.
 
-**JavaScript incluye:** clases con `extends`, `super` y `this`; funciones y flechas; `let` y `const`; `if`, `while`, `for` y `for…of`; recursión; arrays y sus métodos habituales; objetos; template strings; `?.`, `??`, `Math` y `console.log`. El punto y coma es opcional.
+**JavaScript incluye:** clases con `extends`, `super` y `this`; funciones y flechas; `let` y `const`; `if`, `while`, `for` y `for…of`; recursión; arrays y sus métodos habituales; `Map` y `Set`; objetos; template strings; `?.`, `??`, `Math` y `console.log`. El punto y coma es opcional.
 
-**Java incluye:** clases con `extends`, constructores y métodos sobrecargados, `super(...)` y `this(...)`, `private` y `protected`, `this` implícito, tipos (`int` divide como entero y no acepta decimales sin cast), casts, `if`, `while`, `do…while`, `for` y for-each, arrays, `List`/`ArrayList`, `Queue`/`LinkedList`, `ArrayDeque`, `Stack`, `compareTo`, `equals`, `Math`, `Integer.MAX_VALUE` y `System.out.println`. Los genéricos, las anotaciones, `import` e `implements` se aceptan y se ignoran. Los métodos sueltos van con `static`.
+**Java incluye:** clases con `extends`, constructores y métodos sobrecargados, `super(...)` y `this(...)`, `private` y `protected`, `this` implícito, tipos (`int` divide como entero y no acepta decimales sin cast), casts, `if`, `while`, `do…while`, `for` y for-each, arrays, `List`/`ArrayList`, `Queue`/`LinkedList`, `ArrayDeque`, `Stack`, `HashMap`/`LinkedHashMap`/`TreeMap` (con `Map.Entry`), `HashSet`/`LinkedHashSet`/`TreeSet`, `Collections.sort`/`reverse`, `compareTo`, `equals`, `Math`, `Integer.MAX_VALUE` y `System.out.println`. `HashMap` y `HashSet` se recorren en orden de inserción. Los genéricos, las anotaciones, `import` e `implements` se aceptan y se ignoran. Los métodos sueltos van con `static`.
 
-**No incluye:** en JavaScript, getters/setters, campos `#privados`, `async` ni módulos; en Java, interfaces propias, clases internas, lambdas, campos `static` ni `HashMap`/`HashSet`; en ambos, `switch` y `try/catch`. Hay un límite de **200 llamadas anidadas**.
+**No incluye:** en JavaScript, getters/setters, campos `#privados`, `async` ni módulos; en Java, interfaces propias, clases internas, lambdas, campos `static` ni `PriorityQueue` (en Dijkstra y Prim el mínimo se busca recorriendo); en ambos, `switch` y `try/catch`. Hay un límite de **200 llamadas anidadas**.
 
 Los errores se muestran en español y señalan la línea correspondiente. Por ejemplo, si escribís `arbol.raz`, el intérprete puede sugerir `raiz`.
 
 </details>
+
+## Grafos
+
+Elegí **Grafo** en la barra superior. El lienzo pasa a dibujar vértices y aristas: **Dirigido** agrega sentido a las aristas y **Ponderado** les da un peso entero (doble clic en una arista para cambiarlo). Si en un dirigido hay A → B y B → A, se dibujan curvadas para que no se pisen.
+
+El panel dice qué tipo de grafo es y por qué:
+
+| No dirigido | Dirigido |
+| --- | --- |
+| **Árbol** (conexo y acíclico), **bosque**, **conexo** con ciclos o **no conexo**. | **DAG** (acíclico), **fuertemente conexo** o dirigido con ciclos. |
+| Comprueba si es conexo, acíclico, árbol, bipartito y completo. | Comprueba si es débil y fuertemente conexo, acíclico, árbol con raíz y completo. |
+| Etiquetas: `Kn`, regular, euleriano, camino euleriano. | Cuenta componentes fuertes, fuentes y sumideros. |
+
+Cuando algo falla, lo explica con un ejemplo concreto: el ciclo que encontró, las componentes separadas, el par de vecinos que rompe la bipartición, el vértice al que no se llega.
+
+Además muestra los grados y, desde el vértice seleccionado, los recorridos **BFS** y **DFS**, las **distancias** (Dijkstra si es ponderado, cantidad de aristas si no) y el **orden topológico** si es un DAG. Los vecinos se visitan siempre de menor a mayor, igual que en el modo Programar, así podés comparar tu resultado con el del panel.
+
+### Programar con grafos
+
+En **Programar**, con el espacio Grafo, el selector ofrece:
+
+- **Grafo · lista de adyacencia:** implementar la clase `Grafo` (`buscarVertice`, `agregarVertice`, `agregarArista`, `existeArista`, `eliminarArista`, `eliminarVertice`, `adyacentes`, grados y cantidades).
+- **Funciones sueltas**, con la clase `Grafo` ya incluida: contar vértices y aristas, grado y grado máximo, vecinos y vértices aislados, peso total y arista más liviana, fuentes y sumideros, ¿es completo?, ¿es bipartito?, camino más corto con BFS, y dos que modifican el grafo: quitar los vértices aislados e invertir las aristas.
+- **Algoritmos**, también con `Grafo` incluida: BFS y DFS, existe camino, conexo y componentes, tiene ciclo, orden topológico, Dijkstra y Prim.
+- **Hoja en blanco:** para escribir tus propias funciones sobre `grafo`, con `Grafo` incluida. Si definís tu propia clase `Grafo`, reemplaza a la incluida.
+
+Como en los árboles, cada ejercicio empieza con las firmas y los cuerpos vacíos, y **Ver ejemplo correcto** abre una solución que podés ejecutar paso a paso.
+
+| Referencia | Para qué sirve | Ejemplo de llamada |
+| --- | --- | --- |
+| `grafo` | Instancia de la clase elegida en «grafo es un», con el grafo dibujado. | `grafo.adyacentes(1)` |
+| `grafo.vertices` | Un `Vertice` por vértice dibujado, en orden creciente. | `bfs(grafo, 1)` |
+
+`Vertice` (`dato`, `adyacentes`, `visitado`) y `Arista` (`destino`, `peso`) vienen incluidas y están conectadas al dibujo. En un grafo no dirigido, cada arista está en la lista de adyacentes de sus dos vértices. La línea de ejecución sugerida usa vértices que existen en tu dibujo: si son letras, queda por ejemplo `bfs(grafo, "A")`.
+
+Mientras corre el código se ve:
+
+- el vértice que se está procesando, en naranja;
+- los visitados, marcados con el campo `visitado` o con un conjunto llamado `visitados`;
+- los que están en una cola o pila, punteados en azul;
+- la arista que se está mirando, resaltada;
+- las colecciones del paso actual como etiquetas bajo cada vértice, por ejemplo `dist 4`, `cola[0]` o `∈ enCurso`.
+
+Al terminar, si el resultado es un recorrido, los vértices quedan numerados en ese orden.
+
+Si tu código deja una arista en un solo sentido en un grafo no dirigido, aparece con flecha naranja punteada y un aviso en la consola. También se marcan las aristas repetidas y los pesos de ida y vuelta distintos. Si un vértice sale de `grafo.vertices` pero todavía le llegan aristas, queda punteado.
 
 ## Controles
 
@@ -160,11 +210,13 @@ Los errores se muestran en español y señalan la línea correspondiente. Por ej
 | Ordenar / centrar | `L` / `F` |
 | Deshacer / rehacer | `Ctrl/⌘ + Z` / `Ctrl/⌘ + Shift + Z` |
 
+En el espacio **Grafo**, arrastrar desde el punto inferior crea una **arista** hacia otro vértice, o un vértice adyacente si soltás en un espacio vacío. En un grafo ponderado se pide el peso al crearla; **doble clic en una arista** lo cambia. **Ordenar** distribuye los vértices automáticamente. No se admiten lazos ni aristas repetidas.
+
 **La posición determina el lado de un hijo.** Si hay uno solo, es izquierdo o derecho según su posición respecto del padre. Si hay dos, el de más a la izquierda es el izquierdo. Activá **Lados I/D** para ver las etiquetas en las aristas.
 
 ## Guardar y retomar
 
-El **dibujo se guarda automáticamente** en el navegador mediante `localStorage`. También podés exportarlo e importarlo en JSON para conservar ejemplos o compartirlos.
+El **dibujo se guarda automáticamente** en el navegador mediante `localStorage`. El árbol y el grafo se guardan por separado, cada uno con su propio historial para deshacer. También podés exportarlos e importarlos en JSON para conservar ejemplos o compartirlos: al importar un grafo, la aplicación cambia sola al espacio Grafo.
 
 **El código del editor no se guarda al recargar la página:** vuelve al esqueleto inicial. Mientras la página está abierta, cada ejercicio conserva tu código en cada lenguaje. Copiá tus implementaciones a un archivo si querés retomarlas después.
 
@@ -196,7 +248,8 @@ TreeDrawer/
 └── js/
     ├── analysis.js            Clasificación y propiedades de árboles
     ├── layout.js              Distribución automática de nodos
-    ├── state.js               Estado, historial y persistencia
+    ├── graph.js               Análisis, recorridos, distribución y ejemplos de grafos
+    ├── state.js               Estado, historial y persistencia (árbol y grafo)
     ├── examples.js            Árboles de ejemplo
     ├── app.js                 Lienzo SVG, interacción y panel
     ├── editor.js              Editor, resaltado y breakpoints
@@ -206,7 +259,8 @@ TreeDrawer/
         ├── parser.js          Parser del subconjunto de JavaScript
         ├── java-parser.js     Parser del subconjunto de Java (mismo AST)
         ├── interpreter.js     Intérprete paso a paso (JavaScript y Java)
-        └── examples.js        Ejercicios, esqueletos y referencias
+        ├── examples.js        Ejercicios, esqueletos y referencias (árboles)
+        └── graph-examples.js  Ejercicios de grafos: clase Grafo y algoritmos
 ```
 
 </details>

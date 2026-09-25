@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>TreeDrawer</title>
-  <meta name="description" content="Armá árboles arrastrando y conectando nodos, y descubrí si son AG, AB, ABB o AVL.">
+  <meta name="description" content="Armá árboles y grafos arrastrando y conectando nodos: descubrí si un árbol es AG, AB, ABB o AVL, analizá grafos y practicá sus algoritmos.">
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -17,14 +17,19 @@
       <span>TreeDrawer</span>
     </div>
 
-    <div class="mode-tabs" role="tablist" aria-label="Modo">
+    <div class="space-tabs seg" role="tablist" aria-label="Estructura">
+      <button type="button" role="tab" data-space="tree" aria-selected="true" title="Árboles: AG, AB, ABB y AVL">Árbol</button>
+      <button type="button" role="tab" data-space="graph" aria-selected="false" title="Grafos dirigidos o no, con pesos opcionales">Grafo</button>
+    </div>
+
+    <div class="mode-tabs seg" role="tablist" aria-label="Modo">
       <button type="button" role="tab" data-mode="draw" aria-selected="true">Dibujar</button>
       <button type="button" role="tab" data-mode="code" aria-selected="false">Programar</button>
     </div>
 
     <nav class="toolbar" aria-label="Herramientas">
       <div class="group">
-        <button id="btnAdd" title="Nuevo nodo (N)">＋ Nodo</button>
+        <button id="btnAdd" title="Nuevo nodo (N)"><span class="tree-only">＋ Nodo</span><span class="graph-only">＋ Vértice</span></button>
         <button id="btnLayout" title="Ordenar automáticamente (L)">Ordenar</button>
         <button id="btnFit" title="Centrar la vista (F)">Centrar</button>
       </div>
@@ -41,11 +46,20 @@
         <button id="btnClear" class="danger" title="Borrar todo">Limpiar</button>
       </div>
       <div class="group">
-        <label class="toggle" title="Mostrar altura y factor de balance de cada nodo">
+        <label class="toggle tree-only" title="Mostrar altura y factor de balance de cada nodo">
           <input type="checkbox" id="chkMetrics"> Altura / FB
         </label>
-        <label class="toggle" title="Mostrar si cada hijo es izquierdo o derecho">
+        <label class="toggle tree-only" title="Mostrar si cada hijo es izquierdo o derecho">
           <input type="checkbox" id="chkSides"> Lados I/D
+        </label>
+        <label class="toggle graph-only" title="Las aristas tienen sentido (A → B no es lo mismo que B → A)">
+          <input type="checkbox" id="chkDirected"> Dirigido
+        </label>
+        <label class="toggle graph-only" title="Cada arista tiene un peso (doble clic en la arista para cambiarlo)">
+          <input type="checkbox" id="chkWeighted"> Ponderado
+        </label>
+        <label class="toggle graph-only" title="Mostrar el grado de cada vértice">
+          <input type="checkbox" id="chkDegrees"> Grados
         </label>
         <button id="btnTheme" class="icon" title="Cambiar tema" aria-label="Cambiar tema">◐</button>
       </div>
@@ -72,7 +86,7 @@
       <div id="codeEditor" class="code-editor"></div>
       <div id="codeStatus" class="code-status" role="status"></div>
       <div class="tree-row" id="treeRow">
-        <label for="treeClass"><code>arbol</code> es un</label>
+        <label for="treeClass"><code id="objName">arbol</code> es un</label>
         <select id="treeClass" aria-label="Clase de arbol"></select>
       </div>
       <div class="call-row">
@@ -109,6 +123,9 @@
           <marker id="arrowSel" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M0,1 L9,5 L0,9 z" class="arrow-head sel" />
           </marker>
+          <marker id="arrowWarn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,1 L9,5 L0,9 z" class="arrow-head warn" />
+          </marker>
         </defs>
         <rect class="grid-bg" width="100%" height="100%" fill="url(#gridPattern)" />
         <g id="world">
@@ -122,7 +139,7 @@
 
       <div class="empty-state" id="emptyState">
         <p class="big">Doble clic para crear un nodo</p>
-        <p>Arrastrá desde el punto inferior de un nodo hacia otro para conectarlos,<br>o soltalo en un espacio vacío para crear un hijo.</p>
+        <p class="how">Arrastrá desde el punto inferior de un nodo hacia otro para conectarlos,<br>o soltalo en un espacio vacío para crear un hijo.</p>
         <p>También podés cargar un <strong>ejemplo</strong> desde la barra superior.</p>
       </div>
 
@@ -140,7 +157,7 @@
       <section id="selection" class="card"></section>
       <section id="stats" class="card"></section>
 
-      <section class="card">
+      <section class="card tree-only">
         <h3>Insertar valor</h3>
         <p class="muted small">Inserta respetando las reglas del ABB. «AVL» además rebalancea con rotaciones.</p>
         <form id="insertForm" class="insert-row">
@@ -153,15 +170,19 @@
       <details class="card help">
         <summary>Controles</summary>
         <ul>
-          <li><b>Doble clic</b> en el lienzo: nuevo nodo.</li>
-          <li><b>Doble clic</b> en un nodo (o <kbd>Enter</kbd>): editar el valor.</li>
-          <li><b>Arrastrar</b> un nodo: moverlo. Si queda a la izquierda de su padre es hijo izquierdo; a la derecha, derecho.</li>
-          <li><b>Arrastrar desde el punto inferior</b> (o <kbd>Shift</kbd>+arrastrar): conectar con otro nodo, o soltar en vacío para crear un hijo.</li>
+          <li><b>Doble clic</b> en el lienzo: nuevo <span class="tree-only">nodo</span><span class="graph-only">vértice</span>.</li>
+          <li><b>Doble clic</b> en un <span class="tree-only">nodo</span><span class="graph-only">vértice</span> (o <kbd>Enter</kbd>): editar el valor.</li>
+          <li class="tree-only"><b>Arrastrar</b> un nodo: moverlo. Si queda a la izquierda de su padre es hijo izquierdo; a la derecha, derecho.</li>
+          <li class="tree-only"><b>Arrastrar desde el punto inferior</b> (o <kbd>Shift</kbd>+arrastrar): conectar con otro nodo, o soltar en vacío para crear un hijo.</li>
+          <li class="graph-only"><b>Arrastrar</b> un vértice: moverlo.</li>
+          <li class="graph-only"><b>Arrastrar desde el punto inferior</b> (o <kbd>Shift</kbd>+arrastrar): crear una arista hacia otro vértice, o soltar en vacío para crear un vértice adyacente.</li>
+          <li class="graph-only"><b>Doble clic</b> en una arista de un grafo ponderado: cambiar su peso.</li>
           <li><b>Arrastrar el fondo</b>: mover la vista. <b>Rueda</b>: zoom.</li>
           <li><kbd>Supr</kbd>/<kbd>⌫</kbd>: borrar la selección.</li>
-          <li><kbd>L</kbd> ordenar · <kbd>F</kbd> centrar · <kbd>N</kbd> nuevo nodo · <kbd>Esc</kbd> deseleccionar.</li>
+          <li><kbd>L</kbd> ordenar · <kbd>F</kbd> centrar · <kbd>N</kbd> nuevo <span class="tree-only">nodo</span><span class="graph-only">vértice</span> · <kbd>Esc</kbd> deseleccionar.</li>
         </ul>
-        <p class="muted small">Convenciones (como en <code>Nodo.altura</code>): una hoja tiene altura 1 y el árbol vacío, 0. FB = altura(izq) − altura(der). Los ABB no admiten claves repetidas.</p>
+        <p class="muted small tree-only">Convenciones (como en <code>Nodo.altura</code>): una hoja tiene altura 1 y el árbol vacío, 0. FB = altura(izq) − altura(der). Los ABB no admiten claves repetidas.</p>
+        <p class="muted small graph-only">Sin lazos ni aristas repetidas. En un grafo no dirigido, A–B y B–A son la misma arista. Los pesos son enteros.</p>
       </details>
     </aside>
   </main>
@@ -178,6 +199,7 @@
 
   <script src="js/analysis.js"></script>
   <script src="js/layout.js"></script>
+  <script src="js/graph.js"></script>
   <script src="js/state.js"></script>
   <script src="js/examples.js"></script>
   <script src="js/app.js"></script>
@@ -185,6 +207,7 @@
   <script src="js/lang/java-parser.js"></script>
   <script src="js/lang/interpreter.js"></script>
   <script src="js/lang/examples.js"></script>
+  <script src="js/lang/graph-examples.js"></script>
   <script src="js/editor.js"></script>
   <script src="js/guide.js"></script>
   <script src="js/runner.js"></script>

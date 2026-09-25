@@ -1,6 +1,7 @@
 /*
  * Modal «Estructura a implementar»: las clases y métodos del ejercicio (como las interfaces
  * de la materia), en JavaScript o en Java, con el estado de cada uno en tu código.
+ * Sirve para árboles (Nodo incluido) y para grafos (Vertice y Arista incluidos).
  * «Ver en el ejemplo» abre el ejemplo correcto en el editor, en ese método.
  */
 const Guide = (() => {
@@ -69,6 +70,9 @@ const Guide = (() => {
   }
 
   const sigOf = m => (ctx.lang === 'java' ? m.jsig : `${m.sig} → ${m.ret}`);
+  const graph = () => ctx.space === 'graph';
+  const obj = () => (graph() ? 'grafo' : 'arbol');
+  const specOf = name => [...TREE_STRUCTURE, ...GRAPH_STRUCTURE].find(c => c.name === name && !c.builtin);
 
   function classHead(spec) {
     if (ctx.lang === 'java') {
@@ -78,21 +82,21 @@ const Guide = (() => {
   }
 
   // ---------- tarjetas ----------
-  function nodoCard() {
-    const spec = TREE_STRUCTURE.find(c => c.builtin);
-    const title = ctx.lang === 'java' ? 'class Nodo&lt;T&gt;' : 'class Nodo';
-    return `<section class="g-class g-builtin">
-      <header><code class="g-sig"><span class="t-kw">${title.split(' ')[0]}</span> <span class="t-type">${title.split(' ')[1]}</span></code><span class="g-tag">incluida</span></header>
+  /** Clases que vienen con el entorno: Nodo (árboles), o Vertice y Arista (grafos). */
+  function builtinCards() {
+    const specs = graph() ? GRAPH_STRUCTURE.filter(c => c.builtin) : TREE_STRUCTURE.filter(c => c.builtin);
+    return specs.map(spec => `<section class="g-class g-builtin">
+      <header><code class="g-sig"><span class="t-kw">class</span> <span class="t-type">${spec.name}${ctx.lang === 'java' ? '&lt;T&gt;' : ''}</span></code><span class="g-tag">incluida</span></header>
       <p class="g-desc">${esc(spec.desc)}</p>
       <dl class="g-fields">${spec.fields[ctx.lang].map(([k, d]) => `<div><dt><code>${esc(k)}</code></dt><dd>${esc(d)}</dd></div>`).join('')}</dl>
       <ul class="g-plain">${spec.methods[ctx.lang].map(([sig, d]) => `<li><code>${esc(sig)}</code>${d ? ` <span class="muted">${esc(d)}</span>` : ''}</li>`).join('')}</ul>
-    </section>`;
+    </section>`).join('');
   }
 
   function providedCard(spec) {
     return `<section class="g-class g-builtin">
-      <header>${classHead(spec)}<span class="g-tag">${spec.tag}</span><span class="g-tag">incluida</span></header>
-      <p class="g-desc">${esc(spec.desc)} Ya viene resuelta: podés usar sus métodos desde tu clase.</p>
+      <header>${classHead(spec)}${spec.tag !== spec.name ? `<span class="g-tag">${spec.tag}</span>` : ''}<span class="g-tag">incluida</span></header>
+      <p class="g-desc">${esc(spec.desc)} Ya viene resuelta: podés usar sus métodos.</p>
       <ul class="g-plain">${spec.methods.map(m => `<li><code>${esc(sigOf(m))}</code></li>`).join('')}</ul>
     </section>`;
   }
@@ -102,7 +106,7 @@ const Guide = (() => {
     const ok = rows.filter(r => r.st.state === 'done' || r.st.state === 'inherited').length;
     const fields = spec.fields?.[ctx.lang];
     return `<section class="g-class">
-      <header>${classHead(spec)}<span class="g-tag">${spec.tag}</span><span class="g-progress${ok === rows.length ? ' full' : ''}">${ok}/${rows.length}</span></header>
+      <header>${classHead(spec)}${spec.tag !== spec.name ? `<span class="g-tag">${spec.tag}</span>` : ''}<span class="g-progress${ok === rows.length ? ' full' : ''}">${ok}/${rows.length}</span></header>
       <p class="g-desc">${esc(spec.desc)}</p>
       ${fields ? `<dl class="g-fields">${fields.map(([k, d]) => `<div><dt><code>${esc(k)}</code></dt><dd>${esc(d)}</dd></div>`).join('')}</dl>` : ''}
       <ul class="g-methods">${rows.map(({ m, st }) => `
@@ -112,7 +116,7 @@ const Guide = (() => {
             <code>${esc(sigOf(m))}</code>
             ${m.desc || st.note ? `<div class="g-note">${[m.desc, st.note].filter(Boolean).map(esc).join(' · ')}</div>` : ''}
           </div>
-          ${actions({ line: st.line, call: structureCall(m), cls: spec.name, example: { name: m.name, arity: structureArity(m) } })}
+          ${actions({ line: st.line, call: ctx.fillCall(structureCall(m, obj())), cls: spec.name, example: { name: m.name, arity: structureArity(m) } })}
         </li>`).join('')}
       </ul>
     </section>`;
@@ -121,11 +125,11 @@ const Guide = (() => {
   function classesView() {
     const ex = ctx.exercise;
     const classes = classMap();
-    const chain = CLASS_ORDER.slice(0, CLASS_ORDER.indexOf(ex.cls) + 1);
+    const chain = CLASS_ORDER.includes(ex.cls) ? CLASS_ORDER.slice(0, CLASS_ORDER.indexOf(ex.cls) + 1) : [ex.cls];
     return chain.map(name => {
-      const spec = TREE_STRUCTURE.find(c => c.name === name);
+      const spec = specOf(name);
       return ex.provides.includes(name) ? providedCard(spec) : classCard(spec, classes);
-    }).reverse().join('') + nodoCard();
+    }).reverse().join('') + builtinCards();
   }
 
   function functionsView() {
@@ -138,21 +142,39 @@ const Guide = (() => {
       const f = mine.get(ref.name);
       const state = !f ? 'missing' : isPending(f) ? 'pending' : 'done';
       const sig = lines[ref.line - 1].trim().replace(/^function\s+/, '').replace(/\s*\{\s*$/, '');
-      const params = (f ?? ref).params.filter(p => !p.def && !p.rest).map((p, i) => (i === 0 ? 'raiz' : '?'));
+      const GRAPH_ARG = { grafo: 'grafo', dato: '{v}', origen: '{v}', destino: '{w}' };
+      const params = (f ?? ref).params.filter(p => !p.def && !p.rest).map((p, i) => (graph() ? GRAPH_ARG[p.name] ?? (i === 0 ? 'grafo' : '?') : i === 0 ? 'raiz' : '?'));
       return `<li class="g-m" data-state="${state}">
         ${stateBadge(state)}
         <div class="g-main"><code>${esc(sig)}</code>${!f ? '<div class="g-note">no está definida en el código</div>' : ''}</div>
-        ${actions({ line: f?.line, call: `${ref.name}(${params.join(', ')})`, example: { name: ref.name } })}
+        ${actions({ line: f?.line, call: ctx.fillCall(`${ref.name}(${params.join(', ')})`), example: { name: ref.name } })}
       </li>`;
     }).join('');
     return `<section class="g-class">
         <header><b>${esc(ex.name)}</b><span class="g-tag">${ctx.lang === 'java' ? 'métodos static' : 'funciones'}</span></header>
-        <p class="g-desc">Completá cada una. Se prueban con la línea de ejecución, por ejemplo <code>${esc(Exercise.call(ex, ctx.lang))}</code>.</p>
+        <p class="g-desc">Completá cada una. Se prueban con la línea de ejecución, por ejemplo <code>${esc(ctx.fillCall(Exercise.call(ex, ctx.lang)))}</code>.</p>
         <ul class="g-methods">${rows}</ul>
-      </section>` + nodoCard();
+      </section>` + (ex.provides ?? []).map(name => providedCard(specOf(name))).join('') + builtinCards();
+  }
+
+  function graphHelp() {
+    const java = ctx.lang === 'java';
+    return `<details class="g-help">
+      <summary>Cómo se ejecuta y qué se puede usar</summary>
+      <ul>
+        <li><code>grafo</code> es una instancia de la clase elegida en «grafo es un» con el grafo dibujado: <code>grafo.vertices</code> tiene un <code>Vertice</code> por vértice y cada uno guarda sus aristas en <code>adyacentes</code>. Todo en orden creciente, igual que los recorridos del panel.</li>
+        <li>Si el grafo no es dirigido, cada arista está en las listas de sus dos vértices. Si en el dibujo aparece con flecha naranja, quedó en un solo sentido.</li>
+        <li>Mientras corre se marca el vértice actual, los visitados (campo <code>visitado</code> o un conjunto llamado <code>visitados</code>), los que están en una cola o pila, y los mapas y listas del frame actual como etiquetas bajo cada vértice (<code>dist 4</code>, <code>cola[0]</code>…).</li>
+        ${java
+          ? '<li>Java: clases, sobrecarga, genéricos (se aceptan y se ignoran), <code>List</code>/<code>ArrayList</code>, <code>Queue</code>/<code>LinkedList</code>, <code>Stack</code>, <code>HashMap</code>/<code>TreeMap</code>/<code>LinkedHashMap</code>, <code>HashSet</code>/<code>TreeSet</code>, <code>Map.Entry</code>, <code>Collections.sort</code>/<code>reverse</code> e <code>Integer.MAX_VALUE</code>. No hay <code>PriorityQueue</code> ni lambdas: el mínimo se busca recorriendo.</li>'
+          : '<li>JavaScript: clases, funciones y flechas, arrays, <code>Map</code> y <code>Set</code> (<code>set</code>/<code>get</code>/<code>has</code>/<code>add</code>, <code>size</code>), <code>Infinity</code>, <code>Math</code> y <code>console.log</code>.</li>'}
+        <li>«Ver ejemplo correcto» cambia el editor a una solución que podés ejecutar paso a paso; «Volver a mi código» te devuelve lo tuyo tal como estaba. Nada se guarda al recargar la página.</li>
+      </ul>
+    </details>`;
   }
 
   function helpBlock() {
+    if (graph()) return graphHelp();
     const java = ctx.lang === 'java';
     return `<details class="g-help">
       <summary>Cómo se ejecuta y qué se puede usar</summary>
@@ -172,7 +194,8 @@ const Guide = (() => {
   function render() {
     const warn = ctx.parseErr ? `<p class="g-warn error">Tu código tiene un error de sintaxis (línea ${ctx.parseErr.line ?? '?'}): el estado de los métodos puede no estar actualizado.</p>` : '';
     const kind = ctx.exercise.kind;
-    const content = kind === 'classes' ? classesView() : kind === 'functions' ? functionsView() : nodoCard();
+    const provided = () => (ctx.exercise.provides ?? []).map(name => providedCard(specOf(name))).join('');
+    const content = kind === 'classes' ? classesView() : kind === 'functions' ? functionsView() : provided() + builtinCards();
     $('#guideTitle').textContent = `Estructura a implementar · ${LANGS[ctx.lang].name}`;
     body.innerHTML = warn + content + helpBlock();
     body.scrollTop = 0;
