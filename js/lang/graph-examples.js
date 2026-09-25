@@ -641,6 +641,7 @@ function dijkstra(grafo, origen) {
     dist.set(v.dato, Infinity);
     v.visitado = false;
   }
+  if (!dist.has(origen)) return dist; // el origen no está: no se llega a ninguno
   dist.set(origen, 0);
   let actual = masCercano(grafo, dist);
   while (actual !== null) {
@@ -904,6 +905,9 @@ static <T> Map<T, Integer> dijkstra(Grafo<T> grafo, T origen) {
     for (Vertice<T> v : grafo.getVertices()) {
         dist.put(v.getDato(), Integer.MAX_VALUE);
         v.setVisitado(false);
+    }
+    if (!dist.containsKey(origen)) {
+        return dist; // el origen no está: no se llega a ninguno
     }
     dist.put(origen, 0);
     Vertice<T> actual = masCercano(grafo, dist);
@@ -1450,32 +1454,35 @@ static int miMetodo(Grafo<Integer> grafo) {
 `,
 };
 
-/* En los grafos, {v} y {w} de las llamadas se reemplazan por el primer y el último vértice del dibujo. */
+/*
+ * En los grafos, {v} y {w} de las llamadas se reemplazan por el primer y el último vértice del dibujo.
+ * «drawing» es el ejemplo del lienzo pensado para probar cada ejercicio (botón «Grafo de ejemplo»).
+ */
 EXERCISES.push(
-  { id: 'grafo', space: 'graph', group: 'Grafos: estructura', name: 'Grafo · lista de adyacencia', kind: 'classes', cls: 'Grafo', tag: 'Grafo', provides: [], call: { js: 'grafo.adyacentes({v})', java: 'grafo.adyacentes({v})' } },
+  { id: 'grafo', space: 'graph', group: 'Grafos: estructura', name: 'Grafo · lista de adyacencia', kind: 'classes', cls: 'Grafo', tag: 'Grafo', provides: [], drawing: 'ponderado', call: { js: 'grafo.adyacentes({v})', java: 'grafo.adyacentes({v})' } },
   ...[
-    ['g-contar', 'Contar vértices y aristas', ['g_contar'], 'contarAristas(grafo)'],
-    ['g-grado', 'Grado y grado máximo', ['g_grado'], 'grado(grafo, {v})'],
-    ['g-vecinos', 'Vecinos y vértices aislados', ['g_vecinos'], 'vecinos(grafo, {v})'],
-    ['g-pesos', 'Peso total y arista más liviana', ['g_pesos'], 'pesoTotal(grafo)'],
-    ['g-fuentes', 'Fuentes y sumideros (dirigido)', ['g_fuentes'], 'fuentes(grafo)'],
-    ['g-completo', '¿Es completo?', ['g_completo'], 'esCompleto(grafo)'],
-    ['g-bipartito', '¿Es bipartito?', ['g_bipartito'], 'esBipartito(grafo)'],
-    ['g-camino', 'Camino más corto (BFS)', ['g_camino'], 'caminoMasCorto(grafo, {v}, {w})'],
-    ['g-modificar', 'Modificar: quitar aislados e invertir', ['g_modificar'], 'invertir(grafo)'],
-  ].map(([id, name, fns, call]) => ({
-    id, space: 'graph', group: 'Grafos: funciones sueltas', name, kind: 'functions', fns, provides: ['Grafo'], call: { js: call, java: call },
+    ['g-contar', 'Contar vértices y aristas', ['g_contar'], 'contarAristas(grafo)', 'ciclos'],
+    ['g-grado', 'Grado y grado máximo', ['g_grado'], 'grado(grafo, {v})', 'ciclos'],
+    ['g-vecinos', 'Vecinos y vértices aislados', ['g_vecinos'], 'vecinos(grafo, {v})', 'aislados'],
+    ['g-pesos', 'Peso total y arista más liviana', ['g_pesos'], 'pesoTotal(grafo)', 'ponderado'],
+    ['g-fuentes', 'Fuentes y sumideros (dirigido)', ['g_fuentes'], 'fuentes(grafo)', 'dag'],
+    ['g-completo', '¿Es completo?', ['g_completo'], 'esCompleto(grafo)', 'completo'],
+    ['g-bipartito', '¿Es bipartito?', ['g_bipartito'], 'esBipartito(grafo)', 'bipartito'],
+    ['g-camino', 'Camino más corto (BFS)', ['g_camino'], 'caminoMasCorto(grafo, {v}, {w})', 'ciclos'],
+    ['g-modificar', 'Modificar: quitar aislados e invertir', ['g_modificar'], 'invertir(grafo)', 'aislados'],
+  ].map(([id, name, fns, call, drawing]) => ({
+    id, space: 'graph', group: 'Grafos: funciones sueltas', name, kind: 'functions', fns, provides: ['Grafo'], drawing, call: { js: call, java: call },
   })),
   ...[
-    ['recorridos', 'BFS y DFS', ['bfs', 'dfs'], 'bfs(grafo, {v})'],
-    ['camino', 'Existe camino', ['existeCamino'], 'existeCamino(grafo, {v}, {w})'],
-    ['conexo', 'Conexo y componentes', ['conexo', 'componentes'], 'esConexo(grafo)'],
-    ['ciclos', 'Tiene ciclo', ['tieneCiclo'], 'tieneCiclo(grafo)'],
-    ['topologico', 'Orden topológico (DAG)', ['ordenTopologico'], 'ordenTopologico(grafo)'],
-    ['dijkstra', 'Dijkstra (caminos mínimos)', ['dijkstra'], 'dijkstra(grafo, {v})'],
-    ['prim', 'Prim (árbol de expansión mínima)', ['prim'], 'prim(grafo)'],
-  ].map(([id, name, fns, call]) => ({
-    id, space: 'graph', group: 'Grafos: algoritmos', name, kind: 'functions', fns, provides: ['Grafo'], call: { js: call, java: call },
+    ['recorridos', 'BFS y DFS', ['bfs', 'dfs'], 'bfs(grafo, {v})', 'ciclos'],
+    ['camino', 'Existe camino', ['existeCamino'], 'existeCamino(grafo, {v}, {w})', 'bosque'],
+    ['conexo', 'Conexo y componentes', ['conexo', 'componentes'], 'esConexo(grafo)', 'bosque'],
+    ['ciclos', 'Tiene ciclo', ['tieneCiclo'], 'tieneCiclo(grafo)', 'dirigido'],
+    ['topologico', 'Orden topológico (DAG)', ['ordenTopologico'], 'ordenTopologico(grafo)', 'dag'],
+    ['dijkstra', 'Dijkstra (caminos mínimos)', ['dijkstra'], 'dijkstra(grafo, {v})', 'ponderado'],
+    ['prim', 'Prim (árbol de expansión mínima)', ['prim'], 'prim(grafo)', 'ponderado'],
+  ].map(([id, name, fns, call, drawing]) => ({
+    id, space: 'graph', group: 'Grafos: algoritmos', name, kind: 'functions', fns, provides: ['Grafo'], drawing, call: { js: call, java: call },
   })),
-  { id: 'blanco-grafo', space: 'graph', group: 'Libre', name: 'Hoja en blanco', kind: 'free', provides: ['Grafo'], call: { js: 'miFuncion(grafo)', java: 'miMetodo(grafo)' } },
+  { id: 'blanco-grafo', space: 'graph', group: 'Libre', name: 'Hoja en blanco', kind: 'free', provides: ['Grafo'], drawing: 'ponderado', call: { js: 'miFuncion(grafo)', java: 'miMetodo(grafo)' } },
 );

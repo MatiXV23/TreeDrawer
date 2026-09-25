@@ -54,12 +54,12 @@ La ejecución vincula el código con el dibujo: resalta el nodo actual, muestra 
 ## Primeros pasos
 
 1. **[Abrí la aplicación](https://matixv23.github.io/TreeDrawer/)** y elegí **AVL perfecto** en el selector de ejemplos.
-2. Activá **Altura / FB** y **Lados I/D** para relacionar cada nodo con sus propiedades.
+2. En el menú **Vista**, activá **Altura / FB** y **Lados I/D** para relacionar cada nodo con sus propiedades.
 3. Cambiá un valor o agregá un nodo y observá cómo cambia la clasificación.
 4. Entrá en **Programar**, elegí el ejercicio **Altura** y completá la función.
 5. Ejecutá `altura(raiz)` con **Paso** para seguir las llamadas y los valores que devuelve cada una.
 
-> Los ejercicios empiezan con un esqueleto para completar. **Ver ejemplo correcto** muestra en el editor una solución de referencia que podés ejecutar paso a paso; **Volver a mi código** te devuelve lo tuyo tal como estaba.
+> Los ejercicios empiezan con un esqueleto para completar. **Ver ejemplo correcto** muestra en el editor una solución de referencia que podés ejecutar paso a paso; **Volver a mi código** te devuelve lo tuyo tal como estaba. **Árbol de ejemplo** (o **Grafo de ejemplo**) carga en el lienzo un dibujo pensado para probar ese ejercicio.
 
 ## Qué podés aprender
 
@@ -131,7 +131,7 @@ Cada clase es un ejercicio aparte: **AB**, **ABB** y **AVL**. En ABB y AVL, las 
 
 En la selección automática, `arbol` usa la clase del ejercicio siempre que el dibujo lo permita: `ArbolBinarioBusqueda` y `ArbolAVL` necesitan un árbol de búsqueda (ABB o AVL) o un lienzo vacío. Si no, usa la clase más específica que encaje con el dibujo.
 
-Los nodos del dibujo llegan con `altura` calculada. En **Programar**, al activar **Altura / FB**, el campo `altura` se muestra en rojo si no coincide con la altura real: una ayuda para depurar el balanceo.
+Los nodos del dibujo llegan con `altura` calculada. En **Programar**, al activar **Altura / FB** (menú **Vista**), el campo `altura` se muestra en rojo si no coincide con la altura real: una ayuda para depurar el balanceo.
 
 </details>
 
@@ -152,7 +152,7 @@ Los errores se muestran en español y señalan la línea correspondiente. Por ej
 
 ## Grafos
 
-Elegí **Grafo** en la barra superior. El lienzo pasa a dibujar vértices y aristas: **Dirigido** agrega sentido a las aristas y **Ponderado** les da un peso entero (doble clic en una arista para cambiarlo). Si en un dirigido hay A → B y B → A, se dibujan curvadas para que no se pisen.
+Elegí **Grafo** en el selector **Árbol | Grafo** de la barra superior. La primera vez arranca con un grafo ponderado de ejemplo, y en **Ejemplos…** hay más: con ciclos, árbol, no conexo, DAG, dirigido con ciclos, con vértices aislados, bipartito y completo. El lienzo dibuja vértices y aristas; en el menú **Vista**, **Dirigido** agrega sentido a las aristas y **Ponderado** les da un peso entero (doble clic en una arista para cambiarlo). Si en un dirigido hay A → B y B → A, se dibujan curvadas para que no se pisen.
 
 El panel dice qué tipo de grafo es y por qué:
 
@@ -168,14 +168,14 @@ Además muestra los grados y, desde el vértice seleccionado, los recorridos **B
 
 ### Programar con grafos
 
-En **Programar**, con el espacio Grafo, el selector ofrece:
+En **Programar**, con el espacio Grafo, el selector ofrece solo ejercicios de grafos (y con Árbol, solo de árboles):
 
 - **Grafo · lista de adyacencia:** implementar la clase `Grafo` (`buscarVertice`, `agregarVertice`, `agregarArista`, `existeArista`, `eliminarArista`, `eliminarVertice`, `adyacentes`, grados y cantidades).
 - **Funciones sueltas**, con la clase `Grafo` ya incluida: contar vértices y aristas, grado y grado máximo, vecinos y vértices aislados, peso total y arista más liviana, fuentes y sumideros, ¿es completo?, ¿es bipartito?, camino más corto con BFS, y dos que modifican el grafo: quitar los vértices aislados e invertir las aristas.
 - **Algoritmos**, también con `Grafo` incluida: BFS y DFS, existe camino, conexo y componentes, tiene ciclo, orden topológico, Dijkstra y Prim.
 - **Hoja en blanco:** para escribir tus propias funciones sobre `grafo`, con `Grafo` incluida. Si definís tu propia clase `Grafo`, reemplaza a la incluida.
 
-Como en los árboles, cada ejercicio empieza con las firmas y los cuerpos vacíos, y **Ver ejemplo correcto** abre una solución que podés ejecutar paso a paso.
+Como en los árboles, cada ejercicio empieza con las firmas y los cuerpos vacíos, y **Ver ejemplo correcto** abre una solución que podés ejecutar paso a paso. **Grafo de ejemplo** carga el grafo pensado para ese ejercicio: ponderado para Dijkstra y Prim, un DAG para el orden topológico, uno bipartito para ¿es bipartito?, etc. Si entrás a Programar con el grafo vacío, se carga solo.
 
 | Referencia | Para qué sirve | Ejemplo de llamada |
 | --- | --- | --- |
@@ -210,9 +210,11 @@ Si tu código deja una arista en un solo sentido en un grafo no dirigido, aparec
 | Ordenar / centrar | `L` / `F` |
 | Deshacer / rehacer | `Ctrl/⌘ + Z` / `Ctrl/⌘ + Shift + Z` |
 
+El menú **Vista** agrupa las opciones del dibujo: **Altura / FB** y **Lados I/D** en los árboles; **Dirigido**, **Ponderado** y **Grados** en los grafos.
+
 En el espacio **Grafo**, arrastrar desde el punto inferior crea una **arista** hacia otro vértice, o un vértice adyacente si soltás en un espacio vacío. En un grafo ponderado se pide el peso al crearla; **doble clic en una arista** lo cambia. **Ordenar** distribuye los vértices automáticamente. No se admiten lazos ni aristas repetidas.
 
-**La posición determina el lado de un hijo.** Si hay uno solo, es izquierdo o derecho según su posición respecto del padre. Si hay dos, el de más a la izquierda es el izquierdo. Activá **Lados I/D** para ver las etiquetas en las aristas.
+**La posición determina el lado de un hijo.** Si hay uno solo, es izquierdo o derecho según su posición respecto del padre. Si hay dos, el de más a la izquierda es el izquierdo. Activá **Lados I/D** en el menú **Vista** para ver las etiquetas en las aristas.
 
 ## Guardar y retomar
 

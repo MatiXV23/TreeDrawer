@@ -23,6 +23,7 @@ const Runner = (() => {
   const treeRow = $('#treeRow');
   const treeClassSel = $('#treeClass');
   const btnExample = $('#btnExample');
+  const btnDrawing = $('#btnDrawing');
   const solutionBanner = $('#solutionBanner');
   const langButtons = document.querySelectorAll('#langSwitch [data-lang]');
   const objNameEl = $('#objName');
@@ -175,18 +176,22 @@ const Runner = (() => {
     statusEl.textContent = `Sin errores · ${parts.join(' · ')}`;
   }
 
-  /** Valor de un vértice escrito como en el código: 3 o "A". */
-  function vertexLiteral(n) {
+  /**
+   * Valor de un vértice escrito como en el código: 3 o "A". Los datos son números solo si
+   * todos los vértices lo son (si hay una letra, "3" también es un String).
+   */
+  function vertexLiteral(n, numeric) {
     const k = keyOf(n);
-    return NUMERIC_RE.test(k) ? String(Number(k)) : JSON.stringify(k);
+    return numeric ? String(Number(k)) : JSON.stringify(k);
   }
 
   /** Reemplaza {v} y {w} por el primer y el último vértice del dibujo (en orden). */
   function fillCall(call) {
     if (!/\{[vw]\}/.test(call)) return call;
     const nodes = [...Store.state.nodes].sort(vertexComparator(Store.state.nodes).cmp);
-    const v = nodes.length ? vertexLiteral(nodes[0]) : '1';
-    const w = nodes.length > 1 ? vertexLiteral(nodes[nodes.length - 1]) : '2';
+    const numeric = nodes.every(n => NUMERIC_RE.test(keyOf(n)));
+    const v = nodes.length ? vertexLiteral(nodes[0], numeric) : '1';
+    const w = nodes.length > 1 ? vertexLiteral(nodes[nodes.length - 1], numeric) : '2';
     return call.replaceAll('{v}', v).replaceAll('{w}', w);
   }
 
@@ -213,7 +218,9 @@ const Runner = (() => {
     const chips = [];
     const obj = objName();
     const cls = structureOf(resolveTreeClass());
-    if (cls) {
+    // En los ejercicios de funciones la clase viene incluida: las fichas son solo tus funciones.
+    const provided = exercise?.kind === 'functions' && exercise.provides?.includes(cls?.name);
+    if (cls && !provided) {
       for (const m of cls.methods) {
         const label = lang === 'java' ? `${obj}.${m.jsig.replace(/^\S+\s+/, '')}` : `${obj}.${m.sig}`;
         chips.push({ label, call: structureCall(m, obj) });
@@ -880,6 +887,7 @@ const Runner = (() => {
     selCode.disabled = active;
     treeClassSel.disabled = active;
     btnExample.disabled = active || !exercise || exercise.kind === 'free';
+    btnDrawing.disabled = active || !exercise?.drawing;
     langButtons.forEach(b => { b.disabled = active; });
     document.querySelectorAll('.fn-chip').forEach(b => { b.disabled = active; });
     if (!session) runInfo.textContent = '';
@@ -941,10 +949,39 @@ const Runner = (() => {
     viewingSolution = false;
     selCode.value = ex.id;
     treeClassSel.value = '__auto';
+    renderDrawingButton();
+    ensureDrawing();
     setDefaultCall();
     showCode();
+    renderControls();
   }
   selCode.addEventListener('change', () => loadExercise(selCode.value));
+
+  // ---------- dibujo de ejemplo del ejercicio ----------
+  function renderDrawingButton() {
+    const name = exercise?.drawing && App.exampleName(exercise.drawing);
+    const what = isGraphSpace() ? 'un grafo' : 'un árbol';
+    btnDrawing.title = name ? `Cargar en el lienzo ${what} para probar este ejercicio: «${name}» (se puede deshacer)` : '';
+  }
+
+  function loadDrawing() {
+    if (isActive() || !exercise?.drawing) return;
+    clearSession();
+    const wasDefault = callInput.value.trim() === autoCall;
+    const ex = App.loadExample(exercise.drawing);
+    if (!ex) return;
+    if (wasDefault) setDefaultCall();
+    renderTreeClasses();
+    App.toast(`Cargué «${ex.name}». Con Ctrl/⌘+Z volvés al dibujo anterior.`);
+  }
+  btnDrawing.addEventListener('click', loadDrawing);
+
+  /** En Programar, un grafo vacío no muestra nada: se carga el grafo sugerido del ejercicio. */
+  function ensureDrawing() {
+    if (document.body.dataset.mode !== 'code' || !isGraphSpace() || Store.state.nodes.length || !exercise?.drawing || isActive()) return;
+    const ex = App.loadExample(exercise.drawing);
+    if (ex) App.toast(`El grafo estaba vacío: cargué «${ex.name}» para que tengas con qué probar.`);
+  }
 
   function setLang(next) {
     if (next === lang || isActive()) return;
@@ -1138,6 +1175,7 @@ const Runner = (() => {
     onModeChange(mode) {
       if (mode === 'draw' && session) stop();
       if (mode === 'code') {
+        ensureDrawing();
         refreshDefaultCall();
         parseNow();
         renderTreeClasses();

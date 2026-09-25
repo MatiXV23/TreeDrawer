@@ -59,13 +59,17 @@ const Store = (() => {
     try { localStorage.setItem(KEYS[kind], JSON.stringify(ws.state)); } catch { /* sin almacenamiento */ }
   }
 
+  /** Carga los dibujos guardados. Devuelve qué espacios tenían algo guardado: { tree, graph }. */
   function restore() {
+    const found = {};
     for (const k of Object.keys(spaces)) {
       try {
         const raw = localStorage.getItem(KEYS[k]);
         if (raw) spaces[k].state = sanitize(JSON.parse(raw), k);
-      } catch { /* datos corruptos o sin acceso */ }
+        found[k] = !!raw;
+      } catch { found[k] = true; /* datos corruptos o sin acceso: no pisar nada */ }
     }
+    return found;
   }
 
   /** Cambia de espacio de trabajo (árbol o grafo); cada uno conserva su dibujo e historial. */

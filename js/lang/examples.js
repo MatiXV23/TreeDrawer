@@ -1432,25 +1432,25 @@ function makeStub(code, lang) {
  * vienen incluidas (resueltas) para concentrarse en la clase del ejercicio.
  */
 const EXERCISES = [
-  { id: 'ab', group: 'Estructura de clases', name: 'AB · ArbolBinario', kind: 'classes', cls: 'ArbolBinario', tag: 'AB', provides: [], call: { js: 'arbol.altura()', java: 'arbol.altura()' } },
-  { id: 'abb', group: 'Estructura de clases', name: 'ABB · ArbolBinarioBusqueda', kind: 'classes', cls: 'ArbolBinarioBusqueda', tag: 'ABB', provides: ['ArbolBinario'], call: { js: 'arbol.insertar(35)', java: 'arbol.insertar(35)' } },
-  { id: 'avl', group: 'Estructura de clases', name: 'AVL · ArbolAVL', kind: 'classes', cls: 'ArbolAVL', tag: 'AVL', provides: ['ArbolBinario', 'ArbolBinarioBusqueda'], call: { js: 'arbol.insertar(27)', java: 'arbol.insertar(27)' } },
+  { id: 'ab', group: 'Estructura de clases', name: 'AB · ArbolBinario', kind: 'classes', cls: 'ArbolBinario', tag: 'AB', provides: [], drawing: 'ab', call: { js: 'arbol.altura()', java: 'arbol.altura()' } },
+  { id: 'abb', group: 'Estructura de clases', name: 'ABB · ArbolBinarioBusqueda', kind: 'classes', cls: 'ArbolBinarioBusqueda', tag: 'ABB', provides: ['ArbolBinario'], drawing: 'abb', call: { js: 'arbol.insertar(35)', java: 'arbol.insertar(35)' } },
+  { id: 'avl', group: 'Estructura de clases', name: 'AVL · ArbolAVL', kind: 'classes', cls: 'ArbolAVL', tag: 'AVL', provides: ['ArbolBinario', 'ArbolBinarioBusqueda'], drawing: 'avl', call: { js: 'arbol.insertar(27)', java: 'arbol.insertar(27)' } },
   ...[
-    ['altura', 'Altura', ['altura'], 'altura(raiz)'],
-    ['contar', 'Contar nodos y hojas', ['contarNodos', 'contarHojas'], 'contarHojas(raiz)'],
-    ['sumar', 'Sumar datos', ['sumar'], 'sumar(raiz)'],
-    ['minmax', 'Mínimo y máximo (ABB)', ['minimo', 'maximo'], 'minimo(raiz)'],
-    ['buscar', 'Buscar (ABB)', ['buscar'], 'buscar(raiz, 30)'],
-    ['esABB', 'esABB', ['esABB'], { js: 'esABB(raiz)', java: 'esABB(raiz, null, null)' }],
-    ['esAVL', 'esAVL', ['esAVL', 'esABB', 'altura'], 'esAVL(raiz)'],
-    ['espejo', 'Espejo', ['espejo'], 'espejo(raiz)'],
-    ['nivel', 'Nivel de un valor', ['nivel'], { js: 'nivel(raiz, 30)', java: 'nivel(raiz, 30, 0)' }],
-    ['ag', 'Árbol general: altura, cantidad y grado', ['ag'], 'alturaAG(raiz)'],
-  ].map(([id, name, fns, call]) => ({
-    id, group: 'Funciones sueltas', name, kind: 'functions', fns,
+    ['altura', 'Altura', ['altura'], 'altura(raiz)', 'avl'],
+    ['contar', 'Contar nodos y hojas', ['contarNodos', 'contarHojas'], 'contarHojas(raiz)', 'avl'],
+    ['sumar', 'Sumar datos', ['sumar'], 'sumar(raiz)', 'perfect'],
+    ['minmax', 'Mínimo y máximo (ABB)', ['minimo', 'maximo'], 'minimo(raiz)', 'abb'],
+    ['buscar', 'Buscar (ABB)', ['buscar'], 'buscar(raiz, 30)', 'abb'],
+    ['esABB', 'esABB', ['esABB'], { js: 'esABB(raiz)', java: 'esABB(raiz, null, null)' }, 'ab'],
+    ['esAVL', 'esAVL', ['esAVL', 'esABB', 'altura'], 'esAVL(raiz)', 'abb'],
+    ['espejo', 'Espejo', ['espejo'], 'espejo(raiz)', 'perfect'],
+    ['nivel', 'Nivel de un valor', ['nivel'], { js: 'nivel(raiz, 30)', java: 'nivel(raiz, 30, 0)' }, 'avl'],
+    ['ag', 'Árbol general: altura, cantidad y grado', ['ag'], 'alturaAG(raiz)', 'ag'],
+  ].map(([id, name, fns, call, drawing]) => ({
+    id, group: 'Funciones sueltas', name, kind: 'functions', fns, drawing,
     call: typeof call === 'string' ? { js: call, java: call } : call,
   })),
-  { id: 'blanco', group: 'Libre', name: 'Hoja en blanco', kind: 'free', call: { js: 'miFuncion(raiz)', java: 'miMetodo(raiz)' } },
+  { id: 'blanco', group: 'Libre', name: 'Hoja en blanco', kind: 'free', drawing: 'perfect', call: { js: 'miFuncion(raiz)', java: 'miMetodo(raiz)' } },
 ];
 
 const Exercise = (() => {

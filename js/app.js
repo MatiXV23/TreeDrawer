@@ -1067,13 +1067,20 @@
   function renderExamples() {
     selExample.replaceChildren(new Option('Ejemplos…', ''), ...examples().map(ex => new Option(ex.name, ex.id)));
   }
-  selExample.addEventListener('change', () => {
-    const ex = examples().find(x => x.id === selExample.value);
-    selExample.value = '';
-    if (!ex) return;
+  /** Carga un ejemplo del espacio actual en el lienzo (se puede deshacer). Devuelve el ejemplo o null. */
+  function loadExample(id) {
+    const ex = examples().find(x => x.id === id);
+    if (!ex || locked) return null;
+    finishEditor(true);
     Store.replace(isGraph() ? buildGraphExample(ex) : buildExample(ex));
     selection = null;
     fitView();
+    return ex;
+  }
+  selExample.addEventListener('change', () => {
+    const id = selExample.value;
+    selExample.value = '';
+    loadExample(id);
     selExample.blur();
   });
 
@@ -1132,6 +1139,31 @@
     if (weighted) toast('Doble clic en una arista para cambiar su peso.');
   });
 
+  // ---------- menú Vista ----------
+  const btnView = $('#btnView'), viewPanel = $('#viewPanel');
+  function setViewMenu(open) {
+    viewPanel.hidden = !open;
+    btnView.setAttribute('aria-expanded', String(open));
+    if (!open) return;
+    const r = btnView.getBoundingClientRect();
+    viewPanel.style.top = `${r.bottom + 6}px`;
+    viewPanel.style.left = `${Math.max(8, Math.min(r.left, innerWidth - viewPanel.offsetWidth - 8))}px`;
+  }
+  btnView.addEventListener('click', () => setViewMenu(viewPanel.hidden));
+  document.addEventListener('pointerdown', e => {
+    if (!viewPanel.hidden && !viewPanel.contains(e.target) && !btnView.contains(e.target)) setViewMenu(false);
+  });
+  for (const el of [btnView, viewPanel]) {
+    el.addEventListener('keydown', e => {
+      if (e.key !== 'Escape' || viewPanel.hidden) return;
+      e.stopPropagation();
+      setViewMenu(false);
+      btnView.focus();
+    });
+  }
+  addEventListener('resize', () => setViewMenu(false));
+  $('.toolbar').addEventListener('scroll', () => setViewMenu(false), { passive: true });
+
   function applyTheme() {
     if (prefs.theme) document.documentElement.dataset.theme = prefs.theme;
     else delete document.documentElement.dataset.theme;
@@ -1176,15 +1208,26 @@
     if (space === Store.kind || locked) return;
     finishEditor(true);
     selection = null;
+    setViewMenu(false);
     Store.setKind(space);
     prefs.space = space;
     savePrefs();
     applySpace();
+    seedGraph();
     render();
     fitView();
     if (typeof Runner !== 'undefined') Runner.onSpaceChange(space);
   }
   document.querySelectorAll('.space-tabs button').forEach(b => b.addEventListener('click', () => setSpace(b.dataset.space)));
+
+  /** La primera vez que se abre el espacio de grafos (sin nada guardado) arranca con un grafo de ejemplo. */
+  function seedGraph() {
+    if (!isGraph() || restored.graph || Store.state.nodes.length) return;
+    restored.graph = true;
+    const ex = GRAPH_EXAMPLES[0];
+    Store.replace(buildGraphExample(ex));
+    toast(`Cargué el ejemplo «${ex.name}». Hay más en «Ejemplos…».`);
+  }
 
   function setLocked(v) {
     locked = v;
@@ -1204,6 +1247,8 @@
     ensureVisible,
     setLocked,
     setSpace,
+    loadExample,
+    exampleName: id => examples().find(x => x.id === id)?.name ?? null,
     freeSpotNear,
     get space() { return Store.kind; },
     get analysis() { return analysis; },
@@ -1215,9 +1260,10 @@
 
   // ---------- inicio ----------
   applyTheme();
-  Store.restore();
+  const restored = Store.restore();
   Store.setKind(prefs.space === 'graph' ? 'graph' : 'tree');
   applySpace();
+  seedGraph();
   document.body.dataset.mode = 'draw';
   render();
   fitView();

@@ -407,6 +407,11 @@ const GRAPH_EXAMPLES = [
     edges: [[1, 2, 7], [2, 3, 2], [3, 1, 4], [3, 4, 3], [4, 5, 1], [5, 4, 6], [5, 6, 2], [2, 6, 9]],
   },
   {
+    id: 'aislados', name: 'Dirigido con vértices aislados', directed: true, weighted: false,
+    nodes: [['A', 0, 90], ['B', 150, 0], ['C', 150, 180], ['D', 300, 90], ['E', 450, 90], ['F', 90, 300], ['G', 330, 300]],
+    edges: [['A', 'B'], ['A', 'C'], ['B', 'D'], ['C', 'D'], ['D', 'E']],
+  },
+  {
     id: 'bipartito', name: 'Bipartito (K3,3)', directed: false, weighted: false,
     nodes: [[1, 0, 0], [2, 150, 0], [3, 300, 0], [4, 0, 180], [5, 150, 180], [6, 300, 180]],
     edges: [[1, 4], [1, 5], [1, 6], [2, 4], [2, 5], [2, 6], [3, 4], [3, 5], [3, 6]],
