@@ -1,8 +1,10 @@
 /*
- * Práctica de grafos en JavaScript y en Java.
- * El grafo se guarda con lista de adyacencia: Vertice (dato, adyacentes, visitado) y Arista
- * (destino, peso) vienen incluidas y están conectadas al dibujo; la clase Grafo es la que se
- * programa. Los algoritmos (BFS, DFS, Dijkstra…) reciben el grafo con la clase Grafo incluida.
+ * Práctica de grafos en JavaScript y en Java, con dos representaciones:
+ * - Lista de adyacencia (Grafo): Vertice (dato, adyacentes, visitado) y Arista (destino, peso)
+ *   vienen incluidas y están conectadas al dibujo.
+ * - Matriz de adyacencia (GrafoMatriz): vertices[i] es el dato del vértice i y matriz[i][j] el
+ *   peso de la arista i → j (null si no hay); el dibujo sigue a la matriz.
+ * Los algoritmos (BFS, DFS, Dijkstra…) reciben el grafo con la clase correspondiente incluida.
  */
 
 CLASS_CODE.js.skeleton.Grafo = `// Grafo con lista de adyacencia: cada Vertice guarda las aristas que salen de él
@@ -405,7 +407,474 @@ public class Grafo<T> {
 }
 `;
 
+/* ---------- matriz de adyacencia ---------- */
+
+CLASS_CODE.js.skeleton.GrafoMatriz = `// Grafo con matriz de adyacencia: el vértice i es la fila i y la columna i de la matriz
+class GrafoMatriz {
+  constructor(dirigido = false) {
+    this.vertices = [];        // vertices[i] es el dato del vértice i
+    this.matriz = [];          // matriz[i][j]: peso de la arista i → j, o null si no hay
+    this.dirigido = dirigido;  // si no es dirigido, la matriz es simétrica: matriz[i][j] === matriz[j][i]
+  }
+
+  getVertices() {
+    return this.vertices;
+  }
+
+  esDirigido() {
+    return this.dirigido;
+  }
+
+  // la posición del vértice con ese dato (su fila y su columna), o -1 si no está
+  indice(dato) {
+    throw new Error("No implementado");
+  }
+
+  // agrega el dato al final y una fila y una columna nuevas, sin aristas (si ya está, no hace nada)
+  agregarVertice(dato) {
+    throw new Error("No implementado");
+  }
+
+  // agrega los vértices que falten y anota el peso; si no es dirigido, también en matriz[j][i]
+  agregarArista(origen, destino, peso = 1) {
+    throw new Error("No implementado");
+  }
+
+  existeArista(origen, destino) {
+    throw new Error("No implementado");
+  }
+
+  // el peso de la arista origen → destino, o null si no existe
+  peso(origen, destino) {
+    throw new Error("No implementado");
+  }
+
+  // si no es dirigido, borra las dos casillas
+  eliminarArista(origen, destino) {
+    throw new Error("No implementado");
+  }
+
+  // saca el dato, su fila y su columna (así se van las aristas que salen y las que llegan)
+  eliminarVertice(dato) {
+    throw new Error("No implementado");
+  }
+
+  // los datos de sus vecinos: las columnas de su fila que tienen peso
+  adyacentes(dato) {
+    throw new Error("No implementado");
+  }
+
+  // casillas con peso en su fila
+  gradoSalida(dato) {
+    throw new Error("No implementado");
+  }
+
+  // casillas con peso en su columna
+  gradoEntrada(dato) {
+    throw new Error("No implementado");
+  }
+
+  cantidadVertices() {
+    throw new Error("No implementado");
+  }
+
+  // en un no dirigido cada arista ocupa dos casillas, (i, j) y (j, i), pero cuenta una
+  cantidadAristas() {
+    throw new Error("No implementado");
+  }
+}
+`;
+
+CLASS_CODE.js.solution.GrafoMatriz = `// Grafo con matriz de adyacencia: el vértice i es la fila i y la columna i de la matriz
+class GrafoMatriz {
+  constructor(dirigido = false) {
+    this.vertices = [];        // vertices[i] es el dato del vértice i
+    this.matriz = [];          // matriz[i][j]: peso de la arista i → j, o null si no hay
+    this.dirigido = dirigido;  // si no es dirigido, la matriz es simétrica: matriz[i][j] === matriz[j][i]
+  }
+
+  getVertices() {
+    return this.vertices;
+  }
+
+  esDirigido() {
+    return this.dirigido;
+  }
+
+  indice(dato) {
+    for (let i = 0; i < this.vertices.length; i++) {
+      if (this.vertices[i] === dato) return i;
+    }
+    return -1;
+  }
+
+  agregarVertice(dato) {
+    if (this.indice(dato) !== -1) return;
+    this.vertices.push(dato);
+    for (const fila of this.matriz) {
+      fila.push(null); // la columna nueva
+    }
+    this.matriz.push(new Array(this.vertices.length).fill(null)); // la fila nueva
+  }
+
+  agregarArista(origen, destino, peso = 1) {
+    this.agregarVertice(origen);
+    this.agregarVertice(destino);
+    const i = this.indice(origen);
+    const j = this.indice(destino);
+    this.matriz[i][j] = peso;
+    if (!this.dirigido) this.matriz[j][i] = peso;
+  }
+
+  existeArista(origen, destino) {
+    const i = this.indice(origen);
+    const j = this.indice(destino);
+    return i !== -1 && j !== -1 && this.matriz[i][j] !== null;
+  }
+
+  peso(origen, destino) {
+    if (!this.existeArista(origen, destino)) return null;
+    return this.matriz[this.indice(origen)][this.indice(destino)];
+  }
+
+  eliminarArista(origen, destino) {
+    const i = this.indice(origen);
+    const j = this.indice(destino);
+    if (i === -1 || j === -1) return;
+    this.matriz[i][j] = null;
+    if (!this.dirigido) this.matriz[j][i] = null;
+  }
+
+  eliminarVertice(dato) {
+    const k = this.indice(dato);
+    if (k === -1) return;
+    this.matriz.splice(k, 1); // su fila
+    for (const fila of this.matriz) {
+      fila.splice(k, 1); // su columna
+    }
+    this.vertices.splice(k, 1);
+  }
+
+  adyacentes(dato) {
+    const vecinos = [];
+    const i = this.indice(dato);
+    if (i === -1) return vecinos;
+    for (let j = 0; j < this.vertices.length; j++) {
+      if (this.matriz[i][j] !== null) vecinos.push(this.vertices[j]);
+    }
+    return vecinos;
+  }
+
+  gradoSalida(dato) {
+    const i = this.indice(dato);
+    if (i === -1) return 0;
+    let grado = 0;
+    for (let j = 0; j < this.vertices.length; j++) {
+      if (this.matriz[i][j] !== null) grado++;
+    }
+    return grado;
+  }
+
+  gradoEntrada(dato) {
+    const j = this.indice(dato);
+    if (j === -1) return 0;
+    let grado = 0;
+    for (let i = 0; i < this.vertices.length; i++) {
+      if (this.matriz[i][j] !== null) grado++;
+    }
+    return grado;
+  }
+
+  cantidadVertices() {
+    return this.vertices.length;
+  }
+
+  cantidadAristas() {
+    let total = 0;
+    for (let i = 0; i < this.vertices.length; i++) {
+      for (let j = 0; j < this.vertices.length; j++) {
+        if (this.matriz[i][j] !== null) total++;
+      }
+    }
+    return this.dirigido ? total : total / 2;
+  }
+}
+`;
+
+CLASS_CODE.java.skeleton.GrafoMatriz = `// Grafo con matriz de adyacencia: el vértice i es la fila i y la columna i de la matriz
+public class GrafoMatriz<T> {
+    protected List<T> vertices;   // vertices.get(i) es el dato del vértice i
+    protected Integer[][] matriz; // matriz[i][j]: peso de la arista i → j, o null si no hay
+    protected boolean dirigido;   // si no es dirigido, la matriz es simétrica
+
+    public GrafoMatriz() {
+        this(false);
+    }
+
+    public GrafoMatriz(boolean dirigido) {
+        this.vertices = new ArrayList<>();
+        this.matriz = new Integer[0][0];
+        this.dirigido = dirigido;
+    }
+
+    public List<T> getVertices() {
+        return vertices;
+    }
+
+    public boolean esDirigido() {
+        return dirigido;
+    }
+
+    // la posición del vértice con ese dato (su fila y su columna), o -1 si no está
+    public int indice(T dato) {
+        throw new UnsupportedOperationException("No implementado");
+    }
+
+    // agrega el dato al final y una fila y una columna nuevas, sin aristas (si ya está, no hace nada).
+    // Un array no se agranda: hay que crear una matriz de (n + 1) x (n + 1) y copiar la anterior.
+    public void agregarVertice(T dato) {
+        throw new UnsupportedOperationException("No implementado");
+    }
+
+    public void agregarArista(T origen, T destino) {
+        agregarArista(origen, destino, 1);
+    }
+
+    // agrega los vértices que falten y anota el peso; si no es dirigido, también en matriz[j][i]
+    public void agregarArista(T origen, T destino, int peso) {
+        throw new UnsupportedOperationException("No implementado");
+    }
+
+    public boolean existeArista(T origen, T destino) {
+        throw new UnsupportedOperationException("No implementado");
+    }
+
+    // el peso de la arista origen → destino, o null si no existe
+    public Integer peso(T origen, T destino) {
+        throw new UnsupportedOperationException("No implementado");
+    }
+
+    // si no es dirigido, borra las dos casillas
+    public void eliminarArista(T origen, T destino) {
+        throw new UnsupportedOperationException("No implementado");
+    }
+
+    // saca el dato, su fila y su columna: se copia la matriz a una de (n - 1) x (n - 1) salteándolas
+    public void eliminarVertice(T dato) {
+        throw new UnsupportedOperationException("No implementado");
+    }
+
+    // los datos de sus vecinos: las columnas de su fila que tienen peso
+    public List<T> adyacentes(T dato) {
+        throw new UnsupportedOperationException("No implementado");
+    }
+
+    // casillas con peso en su fila
+    public int gradoSalida(T dato) {
+        throw new UnsupportedOperationException("No implementado");
+    }
+
+    // casillas con peso en su columna
+    public int gradoEntrada(T dato) {
+        throw new UnsupportedOperationException("No implementado");
+    }
+
+    public int cantidadVertices() {
+        throw new UnsupportedOperationException("No implementado");
+    }
+
+    // en un no dirigido cada arista ocupa dos casillas, (i, j) y (j, i), pero cuenta una
+    public int cantidadAristas() {
+        throw new UnsupportedOperationException("No implementado");
+    }
+}
+`;
+
+CLASS_CODE.java.solution.GrafoMatriz = `// Grafo con matriz de adyacencia: el vértice i es la fila i y la columna i de la matriz
+public class GrafoMatriz<T> {
+    protected List<T> vertices;   // vertices.get(i) es el dato del vértice i
+    protected Integer[][] matriz; // matriz[i][j]: peso de la arista i → j, o null si no hay
+    protected boolean dirigido;   // si no es dirigido, la matriz es simétrica
+
+    public GrafoMatriz() {
+        this(false);
+    }
+
+    public GrafoMatriz(boolean dirigido) {
+        this.vertices = new ArrayList<>();
+        this.matriz = new Integer[0][0];
+        this.dirigido = dirigido;
+    }
+
+    public List<T> getVertices() {
+        return vertices;
+    }
+
+    public boolean esDirigido() {
+        return dirigido;
+    }
+
+    public int indice(T dato) {
+        for (int i = 0; i < vertices.size(); i++) {
+            if (vertices.get(i).equals(dato)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    public void agregarVertice(T dato) {
+        if (indice(dato) != -1) {
+            return;
+        }
+        int n = vertices.size();
+        Integer[][] nueva = new Integer[n + 1][n + 1]; // arranca toda en null
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < n; j++) {
+                nueva[i][j] = matriz[i][j];
+            }
+        }
+        matriz = nueva;
+        vertices.add(dato);
+    }
+
+    public void agregarArista(T origen, T destino) {
+        agregarArista(origen, destino, 1);
+    }
+
+    public void agregarArista(T origen, T destino, int peso) {
+        agregarVertice(origen);
+        agregarVertice(destino);
+        int i = indice(origen);
+        int j = indice(destino);
+        matriz[i][j] = peso;
+        if (!dirigido) {
+            matriz[j][i] = peso;
+        }
+    }
+
+    public boolean existeArista(T origen, T destino) {
+        int i = indice(origen);
+        int j = indice(destino);
+        return i != -1 && j != -1 && matriz[i][j] != null;
+    }
+
+    public Integer peso(T origen, T destino) {
+        if (!existeArista(origen, destino)) {
+            return null;
+        }
+        return matriz[indice(origen)][indice(destino)];
+    }
+
+    public void eliminarArista(T origen, T destino) {
+        int i = indice(origen);
+        int j = indice(destino);
+        if (i == -1 || j == -1) {
+            return;
+        }
+        matriz[i][j] = null;
+        if (!dirigido) {
+            matriz[j][i] = null;
+        }
+    }
+
+    public void eliminarVertice(T dato) {
+        int k = indice(dato);
+        if (k == -1) {
+            return;
+        }
+        int n = vertices.size();
+        Integer[][] nueva = new Integer[n - 1][n - 1];
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < n; j++) {
+                if (i != k && j != k) {
+                    // las filas y columnas que estaban después de k se corren un lugar
+                    nueva[i < k ? i : i - 1][j < k ? j : j - 1] = matriz[i][j];
+                }
+            }
+        }
+        vertices.remove(k);
+        matriz = nueva;
+    }
+
+    public List<T> adyacentes(T dato) {
+        List<T> vecinos = new ArrayList<>();
+        int i = indice(dato);
+        if (i == -1) {
+            return vecinos;
+        }
+        for (int j = 0; j < vertices.size(); j++) {
+            if (matriz[i][j] != null) {
+                vecinos.add(vertices.get(j));
+            }
+        }
+        return vecinos;
+    }
+
+    public int gradoSalida(T dato) {
+        int i = indice(dato);
+        if (i == -1) {
+            return 0;
+        }
+        int grado = 0;
+        for (int j = 0; j < vertices.size(); j++) {
+            if (matriz[i][j] != null) {
+                grado++;
+            }
+        }
+        return grado;
+    }
+
+    public int gradoEntrada(T dato) {
+        int j = indice(dato);
+        if (j == -1) {
+            return 0;
+        }
+        int grado = 0;
+        for (int i = 0; i < vertices.size(); i++) {
+            if (matriz[i][j] != null) {
+                grado++;
+            }
+        }
+        return grado;
+    }
+
+    public int cantidadVertices() {
+        return vertices.size();
+    }
+
+    public int cantidadAristas() {
+        int total = 0;
+        for (int i = 0; i < vertices.size(); i++) {
+            for (int j = 0; j < vertices.size(); j++) {
+                if (matriz[i][j] != null) {
+                    total++;
+                }
+            }
+        }
+        return dirigido ? total : total / 2;
+    }
+}
+`;
+
 function graphClassHeader(ex, lang) {
+  if (ex.repr === 'matrix') {
+    if (lang === 'java') {
+      return `// ${ex.cls} en Java: grafo con matriz de adyacencia.
+// «grafo» es una instancia de la clase elegida en «grafo es un», con el grafo dibujado:
+// grafo.vertices tiene los datos en orden creciente y grafo.matriz[i][j] el peso de la arista i → j (null si no hay).
+// Probá, por ejemplo: grafo.adyacentes(1)   grafo.agregarArista(1, 9)   grafo.eliminarVertice(2)
+import java.util.*;
+
+`;
+    }
+    return `// ${ex.cls} en JavaScript: grafo con matriz de adyacencia.
+// «grafo» es una instancia de la clase elegida en «grafo es un», con el grafo dibujado:
+// grafo.vertices tiene los datos en orden creciente y grafo.matriz[i][j] el peso de la arista i → j (null si no hay).
+// Probá, por ejemplo: grafo.adyacentes(1)   grafo.agregarArista(1, 9)   grafo.eliminarVertice(2)
+
+`;
+  }
   if (lang === 'java') {
     return `// ${ex.cls} en Java.
 // Ya vienen incluidas: Vertice<T> (dato, adyacentes, visitado) y Arista<T> (destino, peso).
@@ -472,6 +941,32 @@ const GRAPH_STRUCTURE = [
       { name: 'adyacentes', sig: 'adyacentes(dato)', ret: 'dato[]', jsig: 'List<T> adyacentes(T dato)' },
       { name: 'gradoSalida', sig: 'gradoSalida(dato)', ret: 'number', jsig: 'int gradoSalida(T dato)', desc: 'en un no dirigido, el grado' },
       { name: 'gradoEntrada', sig: 'gradoEntrada(dato)', ret: 'number', jsig: 'int gradoEntrada(T dato)' },
+      { name: 'cantidadVertices', sig: 'cantidadVertices()', ret: 'number', jsig: 'int cantidadVertices()' },
+      { name: 'cantidadAristas', sig: 'cantidadAristas()', ret: 'number', jsig: 'int cantidadAristas()', desc: 'en un no dirigido cada arista cuenta una vez' },
+    ],
+  },
+  {
+    name: 'GrafoMatriz',
+    tag: 'Matriz',
+    jheader: 'public class GrafoMatriz<T>',
+    desc: 'Grafo con matriz de adyacencia: el vértice i es la fila i y la columna i, y matriz[i][j] es el peso de la arista i → j (null si no hay).',
+    fields: {
+      js: [['this.vertices', 'array con el dato de cada vértice'], ['this.matriz', 'array de filas: matriz[i][j] es un peso o null'], ['this.dirigido', 'boolean']],
+      java: [['protected List<T> vertices', 'el dato de cada vértice'], ['protected Integer[][] matriz', 'matriz[i][j] es un peso o null'], ['protected boolean dirigido', 'si las aristas tienen sentido']],
+    },
+    methods: [
+      { name: 'getVertices', sig: 'getVertices()', ret: 'dato[]', jsig: 'List<T> getVertices()' },
+      { name: 'esDirigido', sig: 'esDirigido()', ret: 'boolean', jsig: 'boolean esDirigido()' },
+      { name: 'indice', sig: 'indice(dato)', ret: 'number', jsig: 'int indice(T dato)', desc: '-1 si no está' },
+      { name: 'agregarVertice', sig: 'agregarVertice(dato)', ret: 'void', jsig: 'void agregarVertice(T dato)', desc: 'una fila y una columna nuevas' },
+      { name: 'agregarArista', sig: 'agregarArista(origen, destino, peso)', ret: 'void', jsig: 'void agregarArista(T origen, T destino, int peso)', desc: 'si no es dirigido, la matriz queda simétrica' },
+      { name: 'existeArista', sig: 'existeArista(origen, destino)', ret: 'boolean', jsig: 'boolean existeArista(T origen, T destino)' },
+      { name: 'peso', sig: 'peso(origen, destino)', ret: 'number | null', jsig: 'Integer peso(T origen, T destino)' },
+      { name: 'eliminarArista', sig: 'eliminarArista(origen, destino)', ret: 'void', jsig: 'void eliminarArista(T origen, T destino)' },
+      { name: 'eliminarVertice', sig: 'eliminarVertice(dato)', ret: 'void', jsig: 'void eliminarVertice(T dato)', desc: 'saca su fila y su columna' },
+      { name: 'adyacentes', sig: 'adyacentes(dato)', ret: 'dato[]', jsig: 'List<T> adyacentes(T dato)' },
+      { name: 'gradoSalida', sig: 'gradoSalida(dato)', ret: 'number', jsig: 'int gradoSalida(T dato)', desc: 'casillas con peso en su fila' },
+      { name: 'gradoEntrada', sig: 'gradoEntrada(dato)', ret: 'number', jsig: 'int gradoEntrada(T dato)', desc: 'casillas con peso en su columna' },
       { name: 'cantidadVertices', sig: 'cantidadVertices()', ret: 'number', jsig: 'int cantidadVertices()' },
       { name: 'cantidadAristas', sig: 'cantidadAristas()', ret: 'number', jsig: 'int cantidadAristas()', desc: 'en un no dirigido cada arista cuenta una vez' },
     ],
@@ -634,8 +1129,10 @@ function ordenTopologico(grafo) {
   }
   return orden.length === grafo.getVertices().length ? orden : null;
 }`,
-  dijkstra: `// Dijkstra: distancia mínima desde el origen a cada vértice (con pesos no negativos)
-function dijkstra(grafo, origen) {
+  dijkstra: `// Dijkstra: distancia mínima desde el origen a cada vértice (con pesos no negativos).
+// En cada paso se fija el vértice sin visitar más cercano y se mejoran las distancias de sus vecinos.
+// «anterior» guarda desde qué vértice se llega a cada uno por el camino mínimo (sirve para armarlo).
+function dijkstra(grafo, origen, anterior = new Map()) {
   const dist = new Map();
   for (const v of grafo.getVertices()) {
     dist.set(v.dato, Infinity);
@@ -649,11 +1146,27 @@ function dijkstra(grafo, origen) {
     for (const arista of actual.adyacentes) {
       const vecino = arista.destino.dato;
       const nueva = dist.get(actual.dato) + arista.peso;
-      if (nueva < dist.get(vecino)) dist.set(vecino, nueva);
+      if (nueva < dist.get(vecino)) {
+        dist.set(vecino, nueva);
+        anterior.set(vecino, actual.dato);
+      }
     }
     actual = masCercano(grafo, dist);
   }
   return dist;
+}
+
+// Camino mínimo de origen a destino (lista de datos), o null si no se llega.
+// Se corre Dijkstra y se sigue «anterior» desde el destino hacia atrás.
+function caminoMinimo(grafo, origen, destino) {
+  const anterior = new Map();
+  const dist = dijkstra(grafo, origen, anterior);
+  if (!dist.has(destino) || dist.get(destino) === Infinity) return null;
+  const camino = [];
+  for (let paso = destino; paso !== undefined; paso = anterior.get(paso)) {
+    camino.unshift(paso);
+  }
+  return camino;
 }
 
 // el vértice sin visitar con menor distancia, o null si no queda ninguno alcanzable
@@ -899,8 +1412,14 @@ static <T> List<T> ordenTopologico(Grafo<T> grafo) {
     return orden;
 }`,
   dijkstra: `// Dijkstra: distancia mínima desde el origen a cada vértice (con pesos no negativos).
+// En cada paso se fija el vértice sin visitar más cercano y se mejoran las distancias de sus vecinos.
 // Integer.MAX_VALUE hace de «infinito» (todavía no se llegó).
 static <T> Map<T, Integer> dijkstra(Grafo<T> grafo, T origen) {
+    return dijkstra(grafo, origen, new HashMap<>());
+}
+
+// «anterior» guarda desde qué vértice se llega a cada uno por el camino mínimo (sirve para armarlo).
+static <T> Map<T, Integer> dijkstra(Grafo<T> grafo, T origen, Map<T, T> anterior) {
     Map<T, Integer> dist = new HashMap<>();
     for (Vertice<T> v : grafo.getVertices()) {
         dist.put(v.getDato(), Integer.MAX_VALUE);
@@ -918,11 +1437,27 @@ static <T> Map<T, Integer> dijkstra(Grafo<T> grafo, T origen) {
             int nueva = dist.get(actual.getDato()) + arista.getPeso();
             if (nueva < dist.get(vecino)) {
                 dist.put(vecino, nueva);
+                anterior.put(vecino, actual.getDato());
             }
         }
         actual = masCercano(grafo, dist);
     }
     return dist;
+}
+
+// Camino mínimo de origen a destino (lista de datos), o null si no se llega.
+// Se corre Dijkstra y se sigue «anterior» desde el destino hacia atrás.
+static <T> List<T> caminoMinimo(Grafo<T> grafo, T origen, T destino) {
+    Map<T, T> anterior = new HashMap<>();
+    Map<T, Integer> dist = dijkstra(grafo, origen, anterior);
+    if (!dist.containsKey(destino) || dist.get(destino) == Integer.MAX_VALUE) {
+        return null;
+    }
+    List<T> camino = new ArrayList<>();
+    for (T paso = destino; paso != null; paso = anterior.get(paso)) {
+        camino.add(0, paso);
+    }
+    return camino;
 }
 
 // el vértice sin visitar con menor distancia, o null si no queda ninguno alcanzable
@@ -1418,6 +1953,223 @@ static <T> void invertir(Grafo<T> grafo) {
 }`,
 });
 
+/* ---------- algoritmos con matriz de adyacencia (los vértices se manejan por su índice) ---------- */
+
+Object.assign(JS_FUNCTIONS, {
+  m_recorridos: `// BFS con matriz: los vecinos de «actual» son las columnas j de su fila con peso (no null).
+// Los vértices se manejan por su índice; al resultado se agrega el dato: grafo.vertices[i].
+function bfs(grafo, origen) {
+  const orden = [];
+  const n = grafo.vertices.length;
+  const inicio = grafo.indice(origen);
+  if (inicio === -1) return orden;
+  const visitado = new Array(n).fill(false);
+  const cola = [inicio];
+  visitado[inicio] = true;
+  while (cola.length > 0) {
+    const actual = cola.shift();
+    orden.push(grafo.vertices[actual]);
+    for (let j = 0; j < n; j++) {
+      if (grafo.matriz[actual][j] !== null && !visitado[j]) {
+        visitado[j] = true;
+        cola.push(j);
+      }
+    }
+  }
+  return orden;
+}
+
+// DFS con matriz (recursivo): avanza por la primera columna con peso que no esté visitada
+function dfs(grafo, origen) {
+  const orden = [];
+  const inicio = grafo.indice(origen);
+  if (inicio === -1) return orden;
+  const visitado = new Array(grafo.vertices.length).fill(false);
+  visitar(grafo, inicio, visitado, orden);
+  return orden;
+}
+
+function visitar(grafo, i, visitado, orden) {
+  visitado[i] = true;
+  orden.push(grafo.vertices[i]);
+  for (let j = 0; j < grafo.vertices.length; j++) {
+    if (grafo.matriz[i][j] !== null && !visitado[j]) visitar(grafo, j, visitado, orden);
+  }
+}`,
+  m_dijkstra: `// Dijkstra con matriz: dist[i] es la menor distancia conocida desde el origen hasta el vértice i.
+// En cada paso se fija el vértice u sin visitar más cercano y, recorriendo su fila,
+// se mejora dist[v] si pasar por u es más corto. anterior[v] guarda desde qué índice se llega a v.
+function dijkstra(grafo, origen, anterior = []) {
+  const n = grafo.vertices.length;
+  const dist = new Array(n).fill(Infinity);
+  const visitado = new Array(n).fill(false);
+  for (let i = 0; i < n; i++) anterior[i] = -1;
+  const inicio = grafo.indice(origen);
+  if (inicio === -1) return dist; // el origen no está: no se llega a ninguno
+  dist[inicio] = 0;
+  let u = masCercano(dist, visitado);
+  while (u !== -1) {
+    visitado[u] = true;
+    for (let v = 0; v < n; v++) {
+      const peso = grafo.matriz[u][v];
+      if (peso !== null && !visitado[v] && dist[u] + peso < dist[v]) {
+        dist[v] = dist[u] + peso;
+        anterior[v] = u;
+      }
+    }
+    u = masCercano(dist, visitado);
+  }
+  return dist;
+}
+
+// el índice sin visitar con menor distancia, o -1 si no queda ninguno alcanzable
+function masCercano(dist, visitado) {
+  let mejor = -1;
+  for (let i = 0; i < dist.length; i++) {
+    if (!visitado[i] && dist[i] < Infinity && (mejor === -1 || dist[i] < dist[mejor])) mejor = i;
+  }
+  return mejor;
+}
+
+// Camino mínimo de origen a destino (lista de datos), o null si no se llega:
+// Dijkstra y después se sigue anterior[] desde el destino hasta el origen (que tiene -1).
+function caminoMinimo(grafo, origen, destino) {
+  const anterior = [];
+  const dist = dijkstra(grafo, origen, anterior);
+  const fin = grafo.indice(destino);
+  if (fin === -1 || dist[fin] === Infinity) return null;
+  const camino = [];
+  for (let i = fin; i !== -1; i = anterior[i]) {
+    camino.unshift(grafo.vertices[i]);
+  }
+  return camino;
+}`,
+});
+
+Object.assign(JAVA_FUNCTIONS, {
+  m_recorridos: `// BFS con matriz: los vecinos de «actual» son las columnas j de su fila con peso (no null).
+// Los vértices se manejan por su índice; al resultado se agrega el dato: grafo.getVertices().get(i).
+static <T> List<T> bfs(GrafoMatriz<T> grafo, T origen) {
+    List<T> orden = new ArrayList<>();
+    int n = grafo.getVertices().size();
+    int inicio = grafo.indice(origen);
+    if (inicio == -1) {
+        return orden;
+    }
+    boolean[] visitado = new boolean[n];
+    Queue<Integer> cola = new LinkedList<>();
+    cola.add(inicio);
+    visitado[inicio] = true;
+    while (!cola.isEmpty()) {
+        int actual = cola.poll();
+        orden.add(grafo.getVertices().get(actual));
+        for (int j = 0; j < n; j++) {
+            if (grafo.matriz[actual][j] != null && !visitado[j]) {
+                visitado[j] = true;
+                cola.add(j);
+            }
+        }
+    }
+    return orden;
+}
+
+// DFS con matriz (recursivo): avanza por la primera columna con peso que no esté visitada
+static <T> List<T> dfs(GrafoMatriz<T> grafo, T origen) {
+    List<T> orden = new ArrayList<>();
+    int inicio = grafo.indice(origen);
+    if (inicio == -1) {
+        return orden;
+    }
+    boolean[] visitado = new boolean[grafo.getVertices().size()];
+    visitar(grafo, inicio, visitado, orden);
+    return orden;
+}
+
+static <T> void visitar(GrafoMatriz<T> grafo, int i, boolean[] visitado, List<T> orden) {
+    visitado[i] = true;
+    orden.add(grafo.getVertices().get(i));
+    for (int j = 0; j < grafo.getVertices().size(); j++) {
+        if (grafo.matriz[i][j] != null && !visitado[j]) {
+            visitar(grafo, j, visitado, orden);
+        }
+    }
+}`,
+  m_dijkstra: `// Dijkstra con matriz: dist[i] es la menor distancia conocida desde el origen hasta el vértice i.
+// En cada paso se fija el vértice u sin visitar más cercano y, recorriendo su fila,
+// se mejora dist[v] si pasar por u es más corto. Integer.MAX_VALUE hace de «infinito».
+static <T> int[] dijkstra(GrafoMatriz<T> grafo, T origen) {
+    return dijkstra(grafo, origen, new int[grafo.getVertices().size()]);
+}
+
+// anterior[v] guarda desde qué índice se llega a v por el camino mínimo (-1 si ninguno)
+static <T> int[] dijkstra(GrafoMatriz<T> grafo, T origen, int[] anterior) {
+    int n = grafo.getVertices().size();
+    int[] dist = new int[n];
+    boolean[] visitado = new boolean[n];
+    for (int i = 0; i < n; i++) {
+        dist[i] = Integer.MAX_VALUE;
+        anterior[i] = -1;
+    }
+    int inicio = grafo.indice(origen);
+    if (inicio == -1) {
+        return dist; // el origen no está: no se llega a ninguno
+    }
+    dist[inicio] = 0;
+    int u = masCercano(dist, visitado);
+    while (u != -1) {
+        visitado[u] = true;
+        for (int v = 0; v < n; v++) {
+            Integer peso = grafo.matriz[u][v];
+            if (peso != null && !visitado[v] && dist[u] + peso < dist[v]) {
+                dist[v] = dist[u] + peso;
+                anterior[v] = u;
+            }
+        }
+        u = masCercano(dist, visitado);
+    }
+    return dist;
+}
+
+// el índice sin visitar con menor distancia, o -1 si no queda ninguno alcanzable
+static int masCercano(int[] dist, boolean[] visitado) {
+    int mejor = -1;
+    for (int i = 0; i < dist.length; i++) {
+        if (!visitado[i] && dist[i] < Integer.MAX_VALUE && (mejor == -1 || dist[i] < dist[mejor])) {
+            mejor = i;
+        }
+    }
+    return mejor;
+}
+
+// Camino mínimo de origen a destino (lista de datos), o null si no se llega:
+// Dijkstra y después se sigue anterior[] desde el destino hasta el origen (que tiene -1).
+static <T> List<T> caminoMinimo(GrafoMatriz<T> grafo, T origen, T destino) {
+    int[] anterior = new int[grafo.getVertices().size()];
+    int[] dist = dijkstra(grafo, origen, anterior);
+    int fin = grafo.indice(destino);
+    if (fin == -1 || dist[fin] == Integer.MAX_VALUE) {
+        return null;
+    }
+    List<T> camino = new ArrayList<>();
+    for (int i = fin; i != -1; i = anterior[i]) {
+        camino.add(0, grafo.getVertices().get(i));
+    }
+    return camino;
+}`,
+});
+
+const GRAPH_MATRIX_TASK = {
+  js: `// Completá las funciones. «grafo» es el grafo dibujado como matriz de adyacencia (GrafoMatriz ya viene incluida).
+// grafo.vertices[i] es el dato del vértice i y grafo.matriz[i][j] el peso de la arista i → j (null si no hay).
+// Los vértices están en orden creciente, así que el resultado coincide con el panel de Dibujar.
+`,
+  java: `// Completá los métodos. «grafo» es el grafo dibujado como matriz de adyacencia (GrafoMatriz<T> ya viene incluida).
+// grafo.getVertices().get(i) es el dato del vértice i y grafo.matriz[i][j] el peso de la arista i → j (null si no hay).
+// Los vértices están en orden creciente, así que el resultado coincide con el panel de Dibujar.
+import java.util.*;
+`,
+};
+
 const GRAPH_FN_TASK = {
   js: `// Completá las funciones. «grafo» es el grafo dibujado (la clase Grafo ya viene incluida).
 // Cada vértice tiene v.dato, v.adyacentes (sus aristas) y v.visitado; cada arista, arista.destino y arista.peso.
@@ -1434,7 +2186,8 @@ const GRAPH_BLANK = {
   js: `// Escribí tus propias funciones (o clases).
 // «grafo» es el grafo dibujado y la clase Grafo ya viene incluida: grafo.getVertices(), grafo.buscarVertice(dato),
 // grafo.agregarArista(origen, destino, peso)… Cada Vertice tiene dato, adyacentes y visitado; cada Arista, destino y peso.
-// Si definís tu propia clase Grafo, reemplaza a la incluida.
+// Para trabajar con matriz de adyacencia elegí GrafoMatriz en «grafo es un»: grafo.vertices[i] y grafo.matriz[i][j].
+// Si definís tu propia clase Grafo (o GrafoMatriz), reemplaza a la incluida.
 
 function miFuncion(grafo) {
   // Tu código acá
@@ -1444,7 +2197,8 @@ function miFuncion(grafo) {
   java: `// Escribí tus propios métodos (los sueltos van con static) o clases.
 // «grafo» es el grafo dibujado y la clase Grafo<T> ya viene incluida: getVertices(), buscarVertice(dato),
 // agregarArista(origen, destino, peso)… Vertice<T>: getDato(), getAdyacentes(), isVisitado(). Arista<T>: getDestino(), getPeso().
-// Si definís tu propia clase Grafo, reemplaza a la incluida.
+// Para trabajar con matriz de adyacencia elegí GrafoMatriz en «grafo es un»: grafo.getVertices().get(i) y grafo.matriz[i][j].
+// Si definís tu propia clase Grafo (o GrafoMatriz), reemplaza a la incluida.
 import java.util.*;
 
 static int miMetodo(Grafo<Integer> grafo) {
@@ -1460,6 +2214,7 @@ static int miMetodo(Grafo<Integer> grafo) {
  */
 EXERCISES.push(
   { id: 'grafo', space: 'graph', group: 'Grafos: estructura', name: 'Grafo · lista de adyacencia', kind: 'classes', cls: 'Grafo', tag: 'Grafo', provides: [], drawing: 'ponderado', call: { js: 'grafo.adyacentes({v})', java: 'grafo.adyacentes({v})' } },
+  { id: 'grafo-matriz', space: 'graph', group: 'Grafos: estructura', name: 'GrafoMatriz · matriz de adyacencia', kind: 'classes', cls: 'GrafoMatriz', tag: 'Matriz', repr: 'matrix', provides: [], drawing: 'ponderado', call: { js: 'grafo.adyacentes({v})', java: 'grafo.adyacentes({v})' } },
   ...[
     ['g-contar', 'Contar vértices y aristas', ['g_contar'], 'contarAristas(grafo)', 'ciclos'],
     ['g-grado', 'Grado y grado máximo', ['g_grado'], 'grado(grafo, {v})', 'ciclos'],
@@ -1479,10 +2234,16 @@ EXERCISES.push(
     ['conexo', 'Conexo y componentes', ['conexo', 'componentes'], 'esConexo(grafo)', 'bosque'],
     ['ciclos', 'Tiene ciclo', ['tieneCiclo'], 'tieneCiclo(grafo)', 'dirigido'],
     ['topologico', 'Orden topológico (DAG)', ['ordenTopologico'], 'ordenTopologico(grafo)', 'dag'],
-    ['dijkstra', 'Dijkstra (caminos mínimos)', ['dijkstra'], 'dijkstra(grafo, {v})', 'ponderado'],
+    ['dijkstra', 'Dijkstra y camino mínimo', ['dijkstra'], 'dijkstra(grafo, {v})', 'ponderado'],
     ['prim', 'Prim (árbol de expansión mínima)', ['prim'], 'prim(grafo)', 'ponderado'],
   ].map(([id, name, fns, call, drawing]) => ({
     id, space: 'graph', group: 'Grafos: algoritmos', name, kind: 'functions', fns, provides: ['Grafo'], drawing, call: { js: call, java: call },
   })),
-  { id: 'blanco-grafo', space: 'graph', group: 'Libre', name: 'Hoja en blanco', kind: 'free', provides: ['Grafo'], drawing: 'ponderado', call: { js: 'miFuncion(grafo)', java: 'miMetodo(grafo)' } },
+  ...[
+    ['m-recorridos', 'BFS y DFS con matriz', ['m_recorridos'], 'bfs(grafo, {v})', 'ciclos'],
+    ['m-dijkstra', 'Dijkstra con matriz y camino mínimo', ['m_dijkstra'], 'dijkstra(grafo, {v})', 'ponderado'],
+  ].map(([id, name, fns, call, drawing]) => ({
+    id, space: 'graph', group: 'Grafos: matriz de adyacencia', name, kind: 'functions', fns, provides: ['GrafoMatriz'], repr: 'matrix', drawing, call: { js: call, java: call },
+  })),
+  { id: 'blanco-grafo', space: 'graph', group: 'Libre', name: 'Hoja en blanco', kind: 'free', provides: ['Grafo', 'GrafoMatriz'], drawing: 'ponderado', call: { js: 'miFuncion(grafo)', java: 'miMetodo(grafo)' } },
 );

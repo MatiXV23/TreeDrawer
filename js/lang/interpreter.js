@@ -266,9 +266,10 @@ const JSInterp = (() => {
       this.maxDepth = maxDepth;
       this.initialRoot = root;
       this.arbol = null;
-      // Modo grafo: `graph` = { vertices: [{ id, dato, ady: [{ to, w }] }], directed }.
+      // Modo grafo: `graph` = { vertices: [{ id, dato, ady: [{ to, w }] }], directed, matrix }.
       this.graphSpec = graph;
       this.grafo = null;
+      this.matrixIds = null;   // matriz de adyacencia: dato (n-ésima aparición) → id del vértice dibujado
       this.adjArrays = new WeakSet();
       this.vertArrays = new WeakSet();
       this.silent = false;
@@ -377,16 +378,35 @@ const JSInterp = (() => {
       this.global.vars.set('arbol', { v: arbol, kind: 'const' });
     }
 
-    /** Crea `grafo` (instancia de la clase elegida, o un objeto) con los vértices y aristas dibujados. */
+    /**
+     * Crea `grafo` (instancia de la clase elegida, o un objeto) con los vértices y aristas dibujados.
+     * Con lista de adyacencia, `vertices` tiene un Vertice por vértice; con matriz de adyacencia,
+     * `vertices` tiene los datos y `matriz[i][j]` el peso de la arista i → j (null si no hay).
+     */
     createGrafo() {
       const spec = this.graphSpec;
-      const byId = new Map(spec.vertices.map(x => [x.id, this.makeVertex(x.id, x.dato)]));
-      for (const x of spec.vertices) {
-        const ady = this.adjItems(byId.get(x.id));
-        for (const a of x.ady) ady.push(new JEdge(byId.get(a.to), a.w));
+      let list, matriz = null;
+      if (spec.matrix) {
+        const index = new Map(spec.vertices.map((x, i) => [x.id, i]));
+        const rows = spec.vertices.map(x => {
+          const row = new Array(spec.vertices.length).fill(null);
+          for (const a of x.ady) row[index.get(a.to)] = a.w;
+          return row;
+        });
+        // Cada dato conserva el id de su vértice del dibujo (ver matrixIds).
+        this.matrixIds = new Map();
+        spec.vertices.forEach(x => this.matrixIds.set(this.matrixKey(x.dato, 0), x.id));
+        list = this.java ? new JList('list', spec.vertices.map(x => x.dato)) : spec.vertices.map(x => x.dato);
+        matriz = rows;
+      } else {
+        const byId = new Map(spec.vertices.map(x => [x.id, this.makeVertex(x.id, x.dato)]));
+        for (const x of spec.vertices) {
+          const ady = this.adjItems(byId.get(x.id));
+          for (const a of x.ady) ady.push(new JEdge(byId.get(a.to), a.w));
+        }
+        list = this.java ? new JList('list', [...byId.values()]) : [...byId.values()];
+        this.markVertices(list);
       }
-      const list = this.java ? new JList('list', [...byId.values()]) : [...byId.values()];
-      this.markVertices(list);
       const cls = this.treeClass ? this.findEntry(this.treeClass, this.global)?.en.v : null;
       let grafo;
       if (cls instanceof JClass) {
@@ -404,9 +424,15 @@ const JSInterp = (() => {
         grafo = new JObject();
       }
       grafo.props.set('vertices', list);
+      if (matriz) grafo.props.set('matriz', matriz);
       grafo.props.set('dirigido', spec.directed);
       this.grafo = grafo;
       this.global.vars.set('grafo', { v: grafo, kind: 'const' });
+    }
+
+    /** Clave de un dato para matrixIds: el mismo dato repetido (n-ésima aparición) es otro vértice. */
+    matrixKey(dato, nth) {
+      return `${typeof dato}:${String(dato)}#${nth}`;
     }
 
     makeVertex(id, dato) {
@@ -445,7 +471,16 @@ const JSInterp = (() => {
 
     hoist(stmts, env) {
       for (const s of stmts) {
-        if (s.t === 'funcdecl') env.vars.set(s.name, { v: new JFunction(s, env, s.name), kind: 'function' });
+        if (s.t !== 'funcdecl') continue;
+        const f = new JFunction(s, env, s.name);
+        const prev = env.vars.get(s.name)?.v;
+        // Java: los métodos sueltos con el mismo nombre son sobrecargas (se elige por cantidad de argumentos).
+        if (this.java && prev instanceof JFunction && prev.env === env && prev.decl.java) {
+          prev.overloads ??= [prev];
+          prev.overloads.push(f);
+          continue;
+        }
+        env.vars.set(s.name, { v: f, kind: 'function' });
       }
     }
 
@@ -731,9 +766,18 @@ const JSInterp = (() => {
           return cls instanceof JClass && v instanceof JInstance && v.cls.extendsFrom(cls);
         }
         case 'newarr': {
-          const n = yield* this.eval(e.size, env);
-          if (!Number.isInteger(n) || n < 0) throw new RuntimeErr(`NegativeArraySizeException: tamaño de array inválido (${fmt(n, 0, false)}).`, e.size, 'Error');
-          return new Array(n).fill(javaDefault(e.elem));
+          const exprs = e.sizes ?? [e.size];
+          const sizes = [];
+          for (const x of exprs) {
+            const n = yield* this.eval(x, env);
+            if (!Number.isInteger(n) || n < 0) throw new RuntimeErr(`NegativeArraySizeException: tamaño de array inválido (${fmt(n, 0, false)}).`, x, 'Error');
+            sizes.push(n);
+          }
+          // new Integer[n][m]: n filas de m elementos; con una dimensión sin tamaño, las filas quedan en null.
+          const make = d => (d === sizes.length - 1
+            ? new Array(sizes[d]).fill(e.open ? null : javaDefault(e.elem))
+            : Array.from({ length: sizes[d] }, () => make(d + 1)));
+          return make(0);
         }
         case 'member': {
           const obj = yield* this.eval(e.obj, env);
@@ -1036,7 +1080,7 @@ const JSInterp = (() => {
         return;
       }
       if (obj instanceof JInstance || obj instanceof JObject) {
-        if (key === 'vertices' && obj === this.grafo && obj.props.get('vertices') !== v) {
+        if (key === 'vertices' && obj === this.grafo && !this.graphSpec.matrix && obj.props.get('vertices') !== v) {
           this.markVertices(v);
           this.mut();
         }
@@ -1469,6 +1513,7 @@ const JSInterp = (() => {
     }
 
     *invoke(fn, args, e, thisVal) {
+      if (fn.overloads && !arityOk(fn, args.length)) fn = fn.overloads.find(f => arityOk(f, args.length)) ?? fn;
       if (this.stack.length > this.maxDepth) {
         throw new RuntimeErr(`RangeError: se superaron ${this.maxDepth} llamadas anidadas (se llenó la pila). ¿Falta el caso base o la recursión no se acerca a él?`, e, 'RangeError');
       }
@@ -2010,6 +2055,8 @@ const JSInterp = (() => {
      */
     graphState() {
       const g = this.grafo;
+      if (!g) return null; // todavía no se creó (código del nivel superior que corre antes)
+      if (this.graphSpec?.matrix) return this.matrixState();
       const list = g?.props.get('vertices');
       const main = [];
       for (const v of list instanceof JList ? list.items : Array.isArray(list) ? list : []) if (v instanceof JVertex && !main.includes(v)) main.push(v);
@@ -2050,7 +2097,44 @@ const JSInterp = (() => {
       }
       return { nodes, edges, main: new Set(main.map(v => v.id)) };
     }
+
+    /**
+     * Estado de un grafo con matriz de adyacencia: un vértice por dato de grafo.vertices (el
+     * vértice i es la fila y la columna i) y una arista i → j por cada casilla con peso.
+     * Casilla vacía: null (también false, Infinity o Integer.MAX_VALUE); true cuenta como peso 1.
+     */
+    matrixState() {
+      const g = this.grafo;
+      const items = x => (x instanceof JList ? x.items : Array.isArray(x) ? x : []);
+      const datos = items(g.props.get('vertices'));
+      const rows = items(g.props.get('matriz')).map(items);
+      const count = new Map();
+      const nodes = datos.map((dato, index) => {
+        const base = `${typeof dato}:${String(dato)}`;
+        const nth = count.get(base) ?? 0;
+        count.set(base, nth + 1);
+        const key = this.matrixKey(dato, nth);
+        let id = this.matrixIds.get(key);
+        if (!id) {
+          id = this.allocId();
+          this.matrixIds.set(key, id);
+        }
+        return { id, dato, index };
+      });
+      const edges = [];
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = 0; j < nodes.length; j++) {
+          const w = rows[i]?.[j];
+          if (i === j || !matrixHasEdge(w)) continue; // la diagonal (lazos) no se dibuja
+          edges.push({ from: nodes[i].id, to: nodes[j].id, w: w === true ? 1 : w, edge: null });
+        }
+      }
+      return { nodes, edges, main: new Set(nodes.map(v => v.id)), rows };
+    }
   }
 
-  return { Interpreter, JNode, JVertex, JEdge, JMap, JSet, JObject, JFunction, JClass, JInstance, JList, NativeFn, RuntimeErr, fmt };
+  /** ¿La casilla de la matriz de adyacencia tiene una arista? */
+  const matrixHasEdge = w => w === true || (typeof w === 'number' && Number.isFinite(w) && w !== 2147483647);
+
+  return { Interpreter, JNode, JVertex, JEdge, JMap, JSet, JObject, JFunction, JClass, JInstance, JList, NativeFn, RuntimeErr, fmt, matrixHasEdge };
 })();

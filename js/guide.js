@@ -1,7 +1,7 @@
 /*
  * Modal «Estructura a implementar»: las clases y métodos del ejercicio (como las interfaces
  * de la materia), en JavaScript o en Java, con el estado de cada uno en tu código.
- * Sirve para árboles (Nodo incluido) y para grafos (Vertice y Arista incluidos).
+ * Sirve para árboles (Nodo incluido) y para grafos (Vertice y Arista incluidos, o matriz de adyacencia).
  * «Ver en el ejemplo» abre el ejemplo correcto en el editor, en ese método.
  */
 const Guide = (() => {
@@ -84,6 +84,7 @@ const Guide = (() => {
   // ---------- tarjetas ----------
   /** Clases que vienen con el entorno: Nodo (árboles), o Vertice y Arista (grafos). */
   function builtinCards() {
+    if (graph() && ctx.exercise.repr === 'matrix') return ''; // con matriz no se usan Vertice ni Arista
     const specs = graph() ? GRAPH_STRUCTURE.filter(c => c.builtin) : TREE_STRUCTURE.filter(c => c.builtin);
     return specs.map(spec => `<section class="g-class g-builtin">
       <header><code class="g-sig"><span class="t-kw">class</span> <span class="t-type">${spec.name}${ctx.lang === 'java' ? '&lt;T&gt;' : ''}</span></code><span class="g-tag">incluida</span></header>
@@ -162,11 +163,16 @@ const Guide = (() => {
     return `<details class="g-help">
       <summary>Cómo se ejecuta y qué se puede usar</summary>
       <ul>
+        ${ctx.exercise.repr === 'matrix' ? `
+        <li><code>grafo</code> es una instancia de la clase elegida en «grafo es un» con el grafo dibujado como <b>matriz de adyacencia</b>: <code>${java ? 'grafo.getVertices().get(i)' : 'grafo.vertices[i]'}</code> es el dato del vértice <code>i</code> (en orden creciente) y <code>grafo.matriz[i][j]</code> el peso de la arista <code>i → j</code>, o <code>null</code> si no hay.</li>
+        <li>Si el grafo no es dirigido, la matriz es simétrica: cada arista está en <code>[i][j]</code> y en <code>[j][i]</code>. Si en el dibujo aparece con flecha naranja, quedó una sola de las dos casillas.</li>
+        <li>Mientras corre, la pila de llamadas muestra la matriz con la fila del vértice actual (<code>actual</code>, <code>u</code> o <code>i</code>) y la columna que se mira (<code>j</code>, <code>v</code> o <code>vecino</code>); en el dibujo se resalta esa arista. Los arrays con un valor por vértice (<code>dist</code>, <code>visitado</code>, <code>anterior</code>…) se muestran como etiquetas bajo cada vértice.</li>` : `
         <li><code>grafo</code> es una instancia de la clase elegida en «grafo es un» con el grafo dibujado: <code>grafo.vertices</code> tiene un <code>Vertice</code> por vértice y cada uno guarda sus aristas en <code>adyacentes</code>. Todo en orden creciente, igual que los recorridos del panel.</li>
         <li>Si el grafo no es dirigido, cada arista está en las listas de sus dos vértices. Si en el dibujo aparece con flecha naranja, quedó en un solo sentido.</li>
         <li>Mientras corre se marca el vértice actual, los visitados (campo <code>visitado</code> o un conjunto llamado <code>visitados</code>), los que están en una cola o pila, y los mapas y listas del frame actual como etiquetas bajo cada vértice (<code>dist 4</code>, <code>cola[0]</code>…).</li>
+        <li>Para trabajar con <b>matriz de adyacencia</b> están los ejercicios «GrafoMatriz» y los del grupo «Grafos: matriz de adyacencia»; en la hoja en blanco, elegí GrafoMatriz en «grafo es un».</li>`}
         ${java
-          ? '<li>Java: clases, sobrecarga, genéricos (se aceptan y se ignoran), <code>List</code>/<code>ArrayList</code>, <code>Queue</code>/<code>LinkedList</code>, <code>Stack</code>, <code>HashMap</code>/<code>TreeMap</code>/<code>LinkedHashMap</code>, <code>HashSet</code>/<code>TreeSet</code>, <code>Map.Entry</code>, <code>Collections.sort</code>/<code>reverse</code> e <code>Integer.MAX_VALUE</code>. No hay <code>PriorityQueue</code> ni lambdas: el mínimo se busca recorriendo.</li>'
+          ? '<li>Java: clases, sobrecarga (también de métodos sueltos, por cantidad de parámetros), genéricos (se aceptan y se ignoran), arrays de una y dos dimensiones (<code>new Integer[n][n]</code>), <code>List</code>/<code>ArrayList</code>, <code>Queue</code>/<code>LinkedList</code>, <code>Stack</code>, <code>HashMap</code>/<code>TreeMap</code>/<code>LinkedHashMap</code>, <code>HashSet</code>/<code>TreeSet</code>, <code>Map.Entry</code>, <code>Collections.sort</code>/<code>reverse</code> e <code>Integer.MAX_VALUE</code>. No hay <code>PriorityQueue</code> ni lambdas: el mínimo se busca recorriendo.</li>'
           : '<li>JavaScript: clases, funciones y flechas, arrays, <code>Map</code> y <code>Set</code> (<code>set</code>/<code>get</code>/<code>has</code>/<code>add</code>, <code>size</code>), <code>Infinity</code>, <code>Math</code> y <code>console.log</code>.</li>'}
         <li>«Ver ejemplo correcto» cambia el editor a una solución que podés ejecutar paso a paso; «Volver a mi código» te devuelve lo tuyo tal como estaba. Nada se guarda al recargar la página.</li>
       </ul>

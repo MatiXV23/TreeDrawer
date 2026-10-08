@@ -28,7 +28,7 @@ Entender un árbol es más fácil cuando podés **construirlo, modificarlo y seg
 
 Está pensada para estudiantes y para quienes quieran practicar recursión, búsquedas, recorridos y balanceo con una referencia visual. La idea es que escribas tus propias soluciones y puedas comprender qué está pasando en cada nodo.
 
-Con el selector **Árbol | Grafo** de la barra superior pasás a trabajar con **grafos**: dirigidos o no, con pesos opcionales, y con sus propios ejercicios (BFS, DFS, Dijkstra, Prim y más). Cada espacio guarda su propio dibujo.
+Con el selector **Árbol | Grafo** de la barra superior pasás a trabajar con **grafos**: dirigidos o no, con pesos opcionales, representados con **lista o matriz de adyacencia**, y con sus propios ejercicios (BFS, DFS, Dijkstra con camino mínimo, Prim y más). Cada espacio guarda su propio dibujo.
 
 | Dibujá y explorá | Programá y comprendé |
 | --- | --- |
@@ -142,7 +142,7 @@ La aplicación interpreta un subconjunto de cada lenguaje para poder mostrar la 
 
 **JavaScript incluye:** clases con `extends`, `super` y `this`; funciones y flechas; `let` y `const`; `if`, `while`, `for` y `for…of`; recursión; arrays y sus métodos habituales; `Map` y `Set`; objetos; template strings; `?.`, `??`, `Math` y `console.log`. El punto y coma es opcional.
 
-**Java incluye:** clases con `extends`, constructores y métodos sobrecargados, `super(...)` y `this(...)`, `private` y `protected`, `this` implícito, tipos (`int` divide como entero y no acepta decimales sin cast), casts, `if`, `while`, `do…while`, `for` y for-each, arrays, `List`/`ArrayList`, `Queue`/`LinkedList`, `ArrayDeque`, `Stack`, `HashMap`/`LinkedHashMap`/`TreeMap` (con `Map.Entry`), `HashSet`/`LinkedHashSet`/`TreeSet`, `Collections.sort`/`reverse`, `compareTo`, `equals`, `Math`, `Integer.MAX_VALUE` y `System.out.println`. `HashMap` y `HashSet` se recorren en orden de inserción. Los genéricos, las anotaciones, `import` e `implements` se aceptan y se ignoran. Los métodos sueltos van con `static`.
+**Java incluye:** clases con `extends`, constructores y métodos sobrecargados (también los métodos sueltos `static`, por cantidad de parámetros), `super(...)` y `this(...)`, `private` y `protected`, `this` implícito, tipos (`int` divide como entero y no acepta decimales sin cast), casts, `if`, `while`, `do…while`, `for` y for-each, arrays de una y dos dimensiones (`new Integer[n][n]`), `List`/`ArrayList`, `Queue`/`LinkedList`, `ArrayDeque`, `Stack`, `HashMap`/`LinkedHashMap`/`TreeMap` (con `Map.Entry`), `HashSet`/`LinkedHashSet`/`TreeSet`, `Collections.sort`/`reverse`, `compareTo`, `equals`, `Math`, `Integer.MAX_VALUE` y `System.out.println`. `HashMap` y `HashSet` se recorren en orden de inserción. Los genéricos, las anotaciones, `import` e `implements` se aceptan y se ignoran. Los métodos sueltos van con `static`.
 
 **No incluye:** en JavaScript, getters/setters, campos `#privados`, `async` ni módulos; en Java, interfaces propias, clases internas, lambdas, campos `static` ni `PriorityQueue` (en Dijkstra y Prim el mínimo se busca recorriendo); en ambos, `switch` y `try/catch`. Hay un límite de **200 llamadas anidadas**.
 
@@ -164,25 +164,28 @@ El panel dice qué tipo de grafo es y por qué:
 
 Cuando algo falla, lo explica con un ejemplo concreto: el ciclo que encontró, las componentes separadas, el par de vecinos que rompe la bipartición, el vértice al que no se llega.
 
-Además muestra los grados y, desde el vértice seleccionado, los recorridos **BFS** y **DFS**, las **distancias** (Dijkstra si es ponderado, cantidad de aristas si no) y el **orden topológico** si es un DAG. Los vecinos se visitan siempre de menor a mayor, igual que en el modo Programar, así podés comparar tu resultado con el del panel.
+Además muestra los grados y, desde el vértice seleccionado, los recorridos **BFS** y **DFS**, las **distancias** (Dijkstra si es ponderado, cantidad de aristas si no; al pasar el mouse por una distancia se ve su camino mínimo), el **orden topológico** si es un DAG y la **matriz de adyacencia** del dibujo (fila = origen, columna = destino; con pesos si es ponderado). Los vecinos se visitan siempre de menor a mayor, igual que en el modo Programar, así podés comparar tu resultado con el del panel.
 
 ### Programar con grafos
 
 En **Programar**, con el espacio Grafo, el selector ofrece solo ejercicios de grafos (y con Árbol, solo de árboles):
 
 - **Grafo · lista de adyacencia:** implementar la clase `Grafo` (`buscarVertice`, `agregarVertice`, `agregarArista`, `existeArista`, `eliminarArista`, `eliminarVertice`, `adyacentes`, grados y cantidades).
+- **GrafoMatriz · matriz de adyacencia:** la misma interfaz guardando el grafo en una matriz: `indice(dato)`, agregar un vértice suma una fila y una columna (en Java, copiando a una matriz más grande), `peso(origen, destino)`, grados por fila y por columna.
 - **Funciones sueltas**, con la clase `Grafo` ya incluida: contar vértices y aristas, grado y grado máximo, vecinos y vértices aislados, peso total y arista más liviana, fuentes y sumideros, ¿es completo?, ¿es bipartito?, camino más corto con BFS, y dos que modifican el grafo: quitar los vértices aislados e invertir las aristas.
-- **Algoritmos**, también con `Grafo` incluida: BFS y DFS, existe camino, conexo y componentes, tiene ciclo, orden topológico, Dijkstra y Prim.
-- **Hoja en blanco:** para escribir tus propias funciones sobre `grafo`, con `Grafo` incluida. Si definís tu propia clase `Grafo`, reemplaza a la incluida.
+- **Algoritmos**, también con `Grafo` incluida: BFS y DFS, existe camino, conexo y componentes, tiene ciclo, orden topológico, Dijkstra (con `anterior` para armar el `caminoMinimo`) y Prim.
+- **Con matriz de adyacencia**, con `GrafoMatriz` incluida: BFS y DFS, y Dijkstra con los arrays `dist[]`, `visitado[]` y `anterior[]` más `caminoMinimo`.
+- **Hoja en blanco:** para escribir tus propias funciones sobre `grafo`, con `Grafo` y `GrafoMatriz` incluidas (elegí cuál en «grafo es un»). Si definís tu propia clase con alguno de esos nombres, reemplaza a la incluida.
 
 Como en los árboles, cada ejercicio empieza con las firmas y los cuerpos vacíos, y **Ver ejemplo correcto** abre una solución que podés ejecutar paso a paso. **Grafo de ejemplo** carga el grafo pensado para ese ejercicio: ponderado para Dijkstra y Prim, un DAG para el orden topológico, uno bipartito para ¿es bipartito?, etc. Si entrás a Programar con el grafo vacío, se carga solo.
 
 | Referencia | Para qué sirve | Ejemplo de llamada |
 | --- | --- | --- |
 | `grafo` | Instancia de la clase elegida en «grafo es un», con el grafo dibujado. | `grafo.adyacentes(1)` |
-| `grafo.vertices` | Un `Vertice` por vértice dibujado, en orden creciente. | `bfs(grafo, 1)` |
+| `grafo.vertices` | Un `Vertice` por vértice dibujado, en orden creciente (con `GrafoMatriz`, sus datos). | `bfs(grafo, 1)` |
+| `grafo.matriz` | Con `GrafoMatriz`: `matriz[i][j]` es el peso de la arista del vértice `i` al `j`, o `null` si no hay. | `grafo.matriz[0][2]` |
 
-`Vertice` (`dato`, `adyacentes`, `visitado`) y `Arista` (`destino`, `peso`) vienen incluidas y están conectadas al dibujo. En un grafo no dirigido, cada arista está en la lista de adyacentes de sus dos vértices. La línea de ejecución sugerida usa vértices que existen en tu dibujo: si son letras, queda por ejemplo `bfs(grafo, "A")`.
+`Vertice` (`dato`, `adyacentes`, `visitado`) y `Arista` (`destino`, `peso`) vienen incluidas y están conectadas al dibujo. Con `GrafoMatriz`, `grafo.vertices` tiene los datos (el vértice `i` es la fila y la columna `i`) y el dibujo sigue a la matriz: si cambia una casilla, cambia la arista. En un grafo no dirigido, cada arista está en la lista de adyacentes de sus dos vértices. La línea de ejecución sugerida usa vértices que existen en tu dibujo: si son letras, queda por ejemplo `bfs(grafo, "A")`.
 
 Mientras corre el código se ve:
 
@@ -190,7 +193,8 @@ Mientras corre el código se ve:
 - los visitados, marcados con el campo `visitado` o con un conjunto llamado `visitados`;
 - los que están en una cola o pila, punteados en azul;
 - la arista que se está mirando, resaltada;
-- las colecciones del paso actual como etiquetas bajo cada vértice, por ejemplo `dist 4`, `cola[0]` o `∈ enCurso`.
+- las colecciones del paso actual como etiquetas bajo cada vértice, por ejemplo `dist 4`, `cola[0]` o `∈ enCurso`;
+- con matriz de adyacencia, la matriz en la pila de llamadas con la fila del vértice actual (`actual`, `u` o `i`) y la columna que se mira (`j`, `v` o `vecino`), y los arrays por vértice (`dist[i]`, `visitado[i]`, `anterior[i]`) bajo cada vértice.
 
 Al terminar, si el resultado es un recorrido, los vértices quedan numerados en ese orden.
 

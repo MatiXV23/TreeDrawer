@@ -264,8 +264,9 @@ function graphTraversals(a, origin) {
   const start = m.byId.has(origin) ? origin : m.order[0];
 
   const bfs = [start], level = new Map([[start, 0]]);
+  const parent = new Map([[start, null]]);
   for (let i = 0; i < bfs.length; i++) {
-    for (const w of m.out.get(bfs[i])) if (!level.has(w)) { level.set(w, level.get(bfs[i]) + 1); bfs.push(w); }
+    for (const w of m.out.get(bfs[i])) if (!level.has(w)) { level.set(w, level.get(bfs[i]) + 1); parent.set(w, bfs[i]); bfs.push(w); }
   }
   const dfs = [], seen = new Set();
   (function visit(v) {
@@ -274,9 +275,16 @@ function graphTraversals(a, origin) {
     for (const w of m.out.get(v)) if (!seen.has(w)) visit(w);
   })(start);
 
+  // Distancias (Dijkstra si es ponderado; si no, cantidad de aristas por BFS) y el camino mínimo a cada vértice.
   let dist = null;
+  const pathTo = (id, prev) => {
+    const out = [];
+    for (let x = id; x !== null && x !== undefined; x = prev.get(x)) out.unshift(show(x));
+    return out;
+  };
   if (a.weighted) {
     const d = new Map(m.order.map(id => [id, Infinity]));
+    const prev = new Map([[start, null]]);
     const done = new Set();
     d.set(start, 0);
     for (;;) {
@@ -286,12 +294,12 @@ function graphTraversals(a, origin) {
       done.add(best);
       for (const w of m.out.get(best)) {
         const nd = d.get(best) + m.weight.get(`${best}>${w}`);
-        if (nd < d.get(w)) d.set(w, nd);
+        if (nd < d.get(w)) { d.set(w, nd); prev.set(w, best); }
       }
     }
-    dist = m.order.map(id => [show(id), d.get(id)]);
+    dist = m.order.map(id => [show(id), d.get(id), d.get(id) < Infinity ? pathTo(id, prev) : null]);
   } else {
-    dist = m.order.map(id => [show(id), level.has(id) ? level.get(id) : Infinity]);
+    dist = m.order.map(id => [show(id), level.has(id) ? level.get(id) : Infinity, level.has(id) ? pathTo(id, parent) : null]);
   }
 
   let topo = null;
@@ -435,4 +443,31 @@ function buildGraphExample(ex) {
   });
   const edges = ex.edges.map(([a, b, w]) => ({ from: ids.get(String(a)), to: ids.get(String(b)), w: w ?? 1 }));
   return { nodes, edges, nextId: nodes.length + 1, directed: ex.directed, weighted: ex.weighted };
+}
+
+/**
+ * Tabla HTML de una matriz de adyacencia: fila y columna i = vértice labels[i].
+ * cells[i][j] es el peso de la arista i → j (true cuenta como 1); null o vacío = sin arista (·).
+ * `row` y `col` resaltan una fila y una columna (por ejemplo, actual y j mientras corre el código).
+ */
+function matrixTableHtml(labels, cells, { row = null, col = null, caption = '' } = {}) {
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const short = s => (s.length > 4 ? s.slice(0, 3) + '…' : s);
+  const cell = x => {
+    if (x === null || x === false) return { text: '·', has: false };
+    if (x === undefined) return { text: '', has: false };
+    if (x === true) return { text: '1', has: true };
+    if (typeof x === 'number') return x === Infinity || x === 2147483647 ? { text: '∞', has: false } : { text: String(x), has: true };
+    return { text: short(String(x)), has: true };
+  };
+  const head = `<tr><th></th>${labels.map((l, j) => `<th scope="col"${j === col ? ' class="c"' : ''} title="${esc(l)}">${esc(short(l))}</th>`).join('')}</tr>`;
+  const body = labels.map((l, i) => {
+    const tds = labels.map((_, j) => {
+      const c = cell(cells[i]?.[j]);
+      const cls = [c.has ? 'on' : '', i === j ? 'diag' : '', i === row ? 'r' : '', j === col ? 'c' : ''].filter(Boolean).join(' ');
+      return `<td${cls ? ` class="${cls}"` : ''}>${esc(c.text)}</td>`;
+    }).join('');
+    return `<tr><th scope="row"${i === row ? ' class="r"' : ''} title="${esc(l)}">${esc(short(l))}</th>${tds}</tr>`;
+  }).join('');
+  return `<table class="adj-matrix">${caption ? `<caption>${caption}</caption>` : ''}<thead>${head}</thead><tbody>${body}</tbody></table>`;
 }

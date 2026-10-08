@@ -221,10 +221,13 @@ const JavaParser = (() => {
         }
         const fn = parseMethodRest(nameTok, nameTok.value, type, startTok);
         if (!fn) continue;
-        if (topNames.has(nameTok.value)) {
-          throw new SyntaxErr(`El método «${nameTok.value}» está definido dos veces. Fuera de una clase no hay sobrecarga: usá otro nombre.`, nameTok);
+        // Sobrecarga de métodos sueltos: como en las clases, se distinguen por la cantidad de parámetros.
+        const arities = topNames.get(nameTok.value) ?? new Set();
+        if (arities.has(fn.params.length)) {
+          throw new SyntaxErr(`El método «${nameTok.value}» con ${fn.params.length} parámetro(s) está definido dos veces. Las sobrecargas tienen que tener distinta cantidad de parámetros.`, nameTok);
         }
-        topNames.set(nameTok.value, true);
+        arities.add(fn.params.length);
+        topNames.set(nameTok.value, arities);
         body.push({ t: 'funcdecl', name: nameTok.value, params: fn.params, body: fn.body, ret: fn.ret, line: startTok.line, java: true, mods: [...mods] });
       }
     }
@@ -599,11 +602,18 @@ const JavaParser = (() => {
       if (eat('new')) {
         const type = parseType();
         if (is('[')) {
-          next();
-          const size = parseExpr();
-          expect(']');
-          if (is('[')) throw new SyntaxErr('Los arrays de varias dimensiones no están soportados.', peek());
-          return fin({ t: 'newarr', elem: type.base, size }, t);
+          // new int[n], new Integer[n][m] o new int[n][] (las filas quedan en null)
+          const sizes = [];
+          let open = 0;
+          while (is('[')) {
+            next();
+            if (is(']')) { next(); open++; continue; }
+            if (open) throw new SyntaxErr('Después de una dimensión sin tamaño ([]) no puede venir una con tamaño.', peek());
+            sizes.push(parseExpr());
+            expect(']');
+          }
+          if (!sizes.length) throw new SyntaxErr('Falta el tamaño del array: new tipo[tamaño].', peek());
+          return fin({ t: 'newarr', elem: type.base, size: sizes[0], sizes, open }, t);
         }
         if (is('{') && type.dims) return parseArrayInit();
         const ct = type.tok;

@@ -1466,7 +1466,8 @@ const Exercise = (() => {
     if (ex.kind === 'classes') return (graph(ex) ? graphClassHeader : classHeader)(ex, lang) + CLASS_CODE[lang].solution[ex.cls];
     if (ex.kind === 'functions') {
       const fns = lang === 'java' ? JAVA_FUNCTIONS : JS_FUNCTIONS;
-      return (graph(ex) ? GRAPH_FN_TASK : FN_TASK)[lang] + '\n' + ex.fns.map(k => fns[k]).join('\n\n') + '\n';
+      const task = !graph(ex) ? FN_TASK : ex.repr === 'matrix' ? GRAPH_MATRIX_TASK : GRAPH_FN_TASK;
+      return task[lang] + '\n' + ex.fns.map(k => fns[k]).join('\n\n') + '\n';
     }
     return null;
   }

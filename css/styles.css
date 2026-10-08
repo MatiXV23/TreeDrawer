@@ -533,6 +533,7 @@ kbd {
 .trav dt { font-size: 12px; color: var(--muted); }
 .trav dd { margin: 0; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-word; }
 .trav .sep { color: var(--muted); }
+.trav .dist { cursor: help; white-space: nowrap; }
 
 /* insertar */
 .insert-row { display: flex; gap: 6px; }
@@ -1035,3 +1036,20 @@ body:not([data-space="graph"]) .graph-only { display: none !important; }
   font-variant-numeric: tabular-nums;
 }
 .travs-note { margin: 8px 0 0 !important; }
+
+/* Matriz de adyacencia (panel de Dibujar y pila de llamadas) */
+.matrix-scroll { overflow-x: auto; margin-top: 6px; }
+.adj-matrix { border-collapse: collapse; font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; }
+.adj-matrix caption { caption-side: top; text-align: left; padding-bottom: 4px; color: var(--muted); font-size: 11.5px; }
+.adj-matrix th, .adj-matrix td { min-width: 24px; height: 22px; padding: 0 4px; text-align: center; border: 1px solid var(--border); }
+.adj-matrix th { background: var(--surface-2); color: var(--muted); font-weight: 600; }
+.adj-matrix td { color: var(--muted); }
+.adj-matrix td.on { color: var(--text); font-weight: 700; background: var(--accent-soft); }
+.adj-matrix td.diag:not(.on) { background: var(--surface-2); }
+.adj-matrix th.r, .adj-matrix th.c { color: var(--exec); background: var(--exec-soft); }
+.adj-matrix td.r, .adj-matrix td.c { box-shadow: inset 0 0 0 999px var(--line-stack); }
+.adj-matrix td.r.c { box-shadow: inset 0 0 0 2px var(--exec); color: var(--exec); }
+.stack-matrix { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+.stack-matrix .matrix-scroll { margin-top: 0; }
+.matrix-box summary { cursor: pointer; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; margin-top: 14px; }
+.matrix-box p { margin: 6px 0 0; }

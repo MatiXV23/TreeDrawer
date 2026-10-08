@@ -18,7 +18,7 @@
 
   // ---------- preferencias ----------
   const PREFS_KEY = 'treedrawer:prefs:v1';
-  const prefs = Object.assign({ metrics: false, sides: true, degrees: false, theme: null, space: 'tree' }, readJSON(PREFS_KEY));
+  const prefs = Object.assign({ metrics: false, sides: true, degrees: false, matrix: false, theme: null, space: 'tree' }, readJSON(PREFS_KEY));
   function readJSON(key) {
     try { return JSON.parse(localStorage.getItem(key)) || {}; } catch { return {}; }
   }
@@ -584,7 +584,8 @@
     const trav = [
       ['BFS (por niveles)', joinList(t.bfs)],
       ['DFS (en profundidad)', joinList(t.dfs)],
-      [a.weighted ? 'Distancias (Dijkstra)' : 'Distancias (en aristas)', t.dist.map(([k, d]) => `${esc(k)} <b>${fmtDist(d)}</b>`).join('<span class="sep"> ·</span> ')],
+      [a.weighted ? 'Distancias (Dijkstra)' : 'Distancias (en aristas)', t.dist.map(([k, d, path]) =>
+        `<span class="dist" title="${path ? `Camino mínimo: ${esc(path.join(a.directed ? ' → ' : ' – '))}` : `No se llega a ${esc(k)}`}">${esc(k)} <b>${fmtDist(d)}</b></span>`).join('<span class="sep"> ·</span> ')],
     ];
     if (t.topo) trav.push(['Orden topológico', joinList(t.topo)]);
     if (a.components.length > 1) trav.push(['Componentes', a.components.map(c => `{${c.map(id => esc(display(a.model.byId.get(id)))).join(', ')}}`).join(' ')]);
@@ -593,7 +594,27 @@
       <dl class="stats-grid">${rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>
       <h4>Desde «${esc(t.originLabel)}»</h4>
       <dl class="travs">${trav.map(([k, v]) => `<div class="trav"><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl>
-      <p class="muted small travs-note">${origin ? '' : 'Tocá un vértice para usarlo como origen. '}Los vecinos se visitan de menor a mayor.</p>`;
+      <p class="muted small travs-note">${origin ? '' : 'Tocá un vértice para usarlo como origen. '}Los vecinos se visitan de menor a mayor. Pasá el mouse por una distancia para ver su camino mínimo.</p>
+      ${graphMatrixHtml(a, origin)}`;
+    box.querySelector('.matrix-box')?.addEventListener('toggle', e => { prefs.matrix = e.target.open; savePrefs(); });
+  }
+
+  /** Matriz de adyacencia del dibujo (como la arma GrafoMatriz en Programar): fila → columna. */
+  function graphMatrixHtml(a, origin) {
+    const m = a.model;
+    const n = m.order.length;
+    if (n > 15) return `<details class="matrix-box"><summary>Matriz de adyacencia</summary><p class="muted small">Con ${n} vértices la matriz es de ${n}×${n}: es grande para mostrarla acá.</p></details>`;
+    const labels = m.order.map(id => keyOf(m.byId.get(id)) || '∅');
+    const cells = m.order.map(i => m.order.map(j => (m.weight.has(`${i}>${j}`) ? (a.weighted ? m.weight.get(`${i}>${j}`) : 1) : null)));
+    const row = origin ? m.rank.get(origin) : null;
+    const note = a.directed
+      ? 'Fila = origen, columna = destino. La fila de un vértice son sus aristas que salen; su columna, las que llegan.'
+      : 'No dirigido: la matriz es simétrica (cada arista ocupa la casilla [i][j] y la [j][i]).';
+    return `<details class="matrix-box"${prefs.matrix ? ' open' : ''}>
+      <summary>Matriz de adyacencia</summary>
+      <div class="matrix-scroll">${matrixTableHtml(labels, cells, { row: row ?? null })}</div>
+      <p class="muted small">${note} «·» = sin arista (null en GrafoMatriz).${a.weighted ? ' Cada casilla tiene el peso.' : ''}</p>
+    </details>`;
   }
 
   function renderStats() {

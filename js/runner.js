@@ -32,6 +32,15 @@ const Runner = (() => {
   const VISITED_VAR = /visit|marcad/i;
   const QUEUE_VAR = /cola|queue|pila|stack|frontera|pendiente|abierto|porVisitar/i;
   const CURRENT_VAR = /^(actual|act|cur|current|u|v|vertice)$/i;
+  // Matriz de adyacencia: los vértices se manejan por su índice (fila/columna). Los números en variables
+  // con nombre de vértice o de índice son índices, salvo en las que reciben un dato (origen, destino…).
+  const INDEX_VAR = /^(i|j|k|fila|col|columna|idx|indice|pos)\d*$/i;
+  const DATO_VAR = /^(dato|origen|destino|desde|hasta)\d*$/i;
+  const MATRIX_CURRENT = ['actual', 'u', 'i', 'v'];
+  const MATRIX_OTHER = ['vecino', 'j', 'v', 'w'];
+  // Arrays con un valor por vértice (dist[i], visitado[i], anterior[i]…) y colecciones que guardan datos, no índices.
+  const PER_VERTEX_VAR = /dist|visit|marcad|anterior|previo|padre|prev|pred|costo|grado|color|nivel|entrantes/i;
+  const DATO_COLLECTION = /^(orden|resultado|res|camino|recorrido|vecinos|adyacentes|datos|vertices|lista|salida)/i;
 
   let lang = 'js';
   let program = null;       // código del editor (tuyo o el ejemplo correcto)
@@ -100,7 +109,8 @@ const Runner = (() => {
     const names = userClasses();
     if (isGraphSpace()) {
       if (exercise?.cls && names.includes(exercise.cls)) return exercise.cls;
-      return names.includes('Grafo') ? 'Grafo' : names.find(n => !CLASS_ORDER.includes(n)) ?? null;
+      const preferred = exercise?.repr === 'matrix' ? ['GrafoMatriz', 'Grafo'] : ['Grafo', 'GrafoMatriz'];
+      return preferred.find(n => names.includes(n)) ?? names.find(n => !CLASS_ORDER.includes(n)) ?? null;
     }
     if (kind === 'AG' || !names.length) return null;
     if (exercise?.cls && names.includes(exercise.cls) && compatible(exercise.cls, kind)) return exercise.cls;
@@ -131,7 +141,7 @@ const Runner = (() => {
     treeClassSel.innerHTML =
       `<option value="__auto">Automático${auto ? ` (${auto})` : ' (sin clase)'}</option>` +
       names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('') +
-      `<option value="__none">${isGraphSpace() ? 'Sin clase (objeto con vertices)' : 'Sin clase (solo raiz)'}</option>`;
+      `<option value="__none">${!isGraphSpace() ? 'Sin clase (solo raiz)' : exercise?.repr === 'matrix' ? 'Sin clase (objeto con vertices y matriz)' : 'Sin clase (objeto con vertices)'}</option>`;
     treeClassSel.value = [...treeClassSel.options].some(o => o.value === cur) ? cur : '__auto';
   }
   treeClassSel.addEventListener('pointerdown', renderTreeClasses);
@@ -342,8 +352,11 @@ const Runner = (() => {
     }
     const m = a.model;
     const dato = id => (m.numeric ? Number(keyOf(m.byId.get(id))) : keyOf(m.byId.get(id)));
+    const treeClass = resolveTreeClass(a.kind);
     const spec = {
       directed: !!st.directed,
+      // Matriz de adyacencia con GrafoMatriz (o sin clase en un ejercicio de matriz).
+      matrix: treeClass ? treeClass === 'GrafoMatriz' : exercise?.repr === 'matrix',
       vertices: m.order.map(id => ({ id, dato: dato(id), ady: m.out.get(id).map(to => ({ to, w: m.weight.get(`${id}>${to}`) })) })),
     };
     session = {
@@ -362,11 +375,13 @@ const Runner = (() => {
       steps: 0,
       timer: 0,
       callText: callInput.value.trim(),
-      treeClass: resolveTreeClass(a.kind),
+      treeClass,
+      matrix: spec.matrix,
       lang,
       sig: null,
       edgeWarn: new Map(),
       edgeOf: new Map(),
+      edgeKey: () => null,
       datoIndex: new Map(),
     };
     const interp = new JSInterp.Interpreter(runnableProgram(), {
@@ -379,7 +394,7 @@ const Runner = (() => {
     session.gen = interp.run(line);
     // Antes del primer paso el grafo es el dibujado (el intérprete lo arma al arrancar).
     session.graph = {
-      nodes: spec.vertices.map(v => ({ id: v.id, dato: v.dato })),
+      nodes: spec.vertices.map((v, index) => ({ id: v.id, dato: v.dato, index })),
       edges: spec.vertices.flatMap(v => v.ady.map(a => ({ from: v.id, to: a.to, w: a.w, edge: null }))),
       main: new Set(spec.vertices.map(v => v.id)),
     };
@@ -467,11 +482,22 @@ const Runner = (() => {
   /** Clave para buscar un vértice por su dato (3 y "3" son distintos). */
   const datoKey = v => `${typeof v}:${v}`;
 
-  /** El vértice que corresponde a un valor: el propio Vertice o el vértice con ese dato. */
-  function vertexFor(v) {
+  /**
+   * El vértice que corresponde a un valor: el propio Vertice o el vértice con ese dato. Con matriz
+   * de adyacencia, un número en una variable de índice (`name`) es la fila/columna del vértice.
+   */
+  function vertexFor(v, name = null) {
     if (v instanceof JVertex) return v;
+    if (session.matrix && name !== null && typeof v === 'number' && !DATO_VAR.test(name)) {
+      return (VERTEX_VAR.test(name) || INDEX_VAR.test(name)) ? vertexAt(v) : null;
+    }
     if (typeof v === 'number' || typeof v === 'string') return session.datoIndex.get(datoKey(v)) ?? null;
     return null;
+  }
+
+  /** Matriz de adyacencia: el vértice de la fila/columna i. */
+  function vertexAt(i) {
+    return Number.isInteger(i) ? session.graph.nodes[i] ?? null : null;
   }
 
   /**
@@ -484,8 +510,8 @@ const Runner = (() => {
     const direct = session.interp.frameNode(f);
     if (direct || session.space !== 'graph' || !f.fn) return direct;
     for (const p of f.fn.decl.params) {
-      if (!VERTEX_VAR.test(p.name)) continue;
-      const hit = vertexFor(f.baseEnv.vars.get(p.name)?.v);
+      if (!VERTEX_VAR.test(p.name) && !(session.matrix && INDEX_VAR.test(p.name))) continue;
+      const hit = vertexFor(f.baseEnv.vars.get(p.name)?.v, p.name);
       if (hit) return hit;
     }
     return null;
@@ -680,7 +706,10 @@ const Runner = (() => {
       }
     }
     const sig = g.nodes.map(v => `${v.id}=${datoKey(v.dato)}`).join(',') + '#' + edges.map(e => `${e.from}>${e.to}/${e.w}`).join(',');
-    return { edges, warn, edgeOf, sig };
+    // Clave de la arista dibujada entre dos vértices (en un no dirigido, en cualquier sentido).
+    const drawn = new Set(edges.map(e => `${e.from}>${e.to}`));
+    const edgeKey = (a, b) => (drawn.has(`${a}>${b}`) ? `${a}>${b}` : !session.directed && drawn.has(`${b}>${a}`) ? `${b}>${a}` : null);
+    return { edges, warn, edgeOf, edgeKey, sig };
   }
 
   /** Dónde aparecen los vértices nuevos: cerca del vértice en foco, o del centro de la vista. */
@@ -691,12 +720,14 @@ const Runner = (() => {
 
   function syncGraph() {
     const g = session.interp.graphState();
+    if (!g) return; // el grafo todavía no se armó
     session.graph = g;
     session.datoIndex = new Map();
     for (const v of g.nodes) if (!session.datoIndex.has(datoKey(v.dato))) session.datoIndex.set(datoKey(v.dato), v);
     const view = graphViewOf(g);
     session.edgeWarn = view.warn;
     session.edgeOf = view.edgeOf;
+    session.edgeKey = view.edgeKey;
     if (view.sig === session.sig) { Store.touch(); return; }
     // Primer cambio: se guarda el dibujo original para poder volver (Detener o Ctrl+Z).
     markMutated();
@@ -821,6 +852,7 @@ const Runner = (() => {
       }).join('') + '</ol>';
       if (frames.length > MAX) html += `<p class="stack-more">… y ${frames.length - MAX} llamadas más abajo</p>`;
     }
+    if (session.matrix) html += matrixSection();
     const globals = [];
     if (it.arbol) globals.push(['arbol', it.arbol instanceof JSInterp.JInstance ? it.arbol.cls.name : 'objeto'], ['arbol.raiz', shortValue(it.getRoot())]);
     if (it.grafo) {
@@ -833,6 +865,30 @@ const Runner = (() => {
     }
     html += `<div class="globals">${globals.map(([k, v]) => `<span><span class="k">${esc(k)}</span> = <span class="v">${esc(v)}</span></span>`).join('')}</div>`;
     stackCard.innerHTML = html;
+  }
+
+  /** Matriz de adyacencia: grafo.matriz como tabla, con la fila del vértice actual y la columna que se mira. */
+  function matrixSection() {
+    const g = session.graph;
+    const n = g.nodes.length;
+    if (!n) return '';
+    if (n > 12) return `<div class="stack-matrix"><p class="stack-more">La matriz es de ${n}×${n}: es grande para mostrarla acá.</p></div>`;
+    const rows = g.rows ?? g.nodes.map(a => g.nodes.map(b => g.edges.find(e => e.from === a.id && e.to === b.id)?.w ?? null));
+    let row = null, col = null;
+    const top = topFrame();
+    if (isActive() && top && !top.isMain) {
+      const vars = new Map(session.interp.frameVars(top));
+      const at = k => (vars.has(k) ? vertexFor(vars.get(k), k) : null);
+      const curName = MATRIX_CURRENT.find(at);
+      const otherName = MATRIX_OTHER.find(k => k !== curName && at(k));
+      const index = v => (v ? g.nodes.indexOf(v) : -1);
+      row = curName ? index(at(curName)) : -1;
+      col = otherName ? index(at(otherName)) : -1;
+      if (row < 0) row = null;
+      if (col < 0) col = null;
+    }
+    const labels = g.nodes.map(v => fmt(v.dato));
+    return `<div class="stack-matrix"><div class="matrix-scroll">${matrixTableHtml(labels, rows, { row, col, caption: 'grafo.matriz (fila → columna)' })}</div></div>`;
   }
 
   function renderConsole() {
@@ -1060,16 +1116,26 @@ const Runner = (() => {
    * Lo que se marca sobre el grafo: el vértice en foco y los de llamadas pendientes, los visitados
    * (campo visitado, o un conjunto llamado «visitados»), los que están en una cola o pila, y las
    * colecciones del frame actual como etiquetas (dist 3, cola[0], ∈ enCurso…).
+   * Con matriz de adyacencia los vértices son índices: dist[i], visitado[i] y anterior[i] se
+   * muestran en el vértice i, y la casilla matriz[actual][j] que se mira, como arista resaltada.
    */
   function graphOverlay() {
     const it = session.interp;
     const g = session.graph;
+    const n = g.nodes.length;
     const running = session.status !== 'done';
     const top = topFrame();
+    const vars = running && top && !top.isMain ? it.frameVars(top) : [];
+    const byName = new Map(vars);
     // Vértice actual: el que el código está procesando (actual, v, vertice…) o, si no hay, el de la llamada.
     let cur = null;
     if (running && top && !top.isMain) {
-      for (const [k, v] of it.frameVars(top)) if (CURRENT_VAR.test(k)) cur = vertexFor(v) ?? cur;
+      if (session.matrix) {
+        const k = MATRIX_CURRENT.find(name => vertexFor(byName.get(name), name));
+        if (k) cur = vertexFor(byName.get(k), k);
+      } else {
+        for (const [k, v] of vars) if (CURRENT_VAR.test(k)) cur = vertexFor(v) ?? cur;
+      }
       cur ??= focusOf(top);
     }
     const stack = new Set();
@@ -1082,6 +1148,20 @@ const Runner = (() => {
       if (!map.has(id)) map.set(id, []);
       if (!map.get(id).includes(text)) map.get(id).push(text);
     };
+    /** Matriz: dist[i], visitado[i], anterior[i]… (un valor por vértice, en el vértice i). */
+    const perVertex = (name, items) => {
+      items.forEach((x, i) => {
+        const hit = vertexAt(i);
+        if (!hit) return;
+        if (VISITED_VAR.test(name)) { if (x === true) visited.add(hit.id); return; }
+        // anterior[i] guarda un índice: se muestra el dato de ese vértice (con -1 todavía no hay).
+        if (/anterior|previo|padre|prev|pred/i.test(name) && Number.isInteger(x)) {
+          if (x >= 0) push(badges, hit.id, `${name} ${badgeValue(vertexAt(x)?.dato ?? x)}`);
+          return;
+        }
+        push(badges, hit.id, `${name} ${badgeValue(x)}`);
+      });
+    };
     const collection = (name, v) => {
       if (v instanceof JMap) {
         if (v.map.size > 200) return;
@@ -1093,8 +1173,11 @@ const Runner = (() => {
       }
       const items = v instanceof JList ? v.items : Array.isArray(v) ? v : v instanceof JSet ? [...v.set] : null;
       if (!items || items.length > 200) return;
+      if (session.matrix && Array.isArray(v) && items.length === n && PER_VERTEX_VAR.test(name)) return perVertex(name, items);
+      // Con matriz, los números de una cola o pila son índices; los de una lista de resultados, datos.
+      const itemName = session.matrix && !DATO_COLLECTION.test(name) ? 'i' : null;
       items.forEach((x, i) => {
-        const hit = vertexFor(x);
+        const hit = vertexFor(x, itemName);
         if (!hit) return;
         if (VISITED_VAR.test(name)) visited.add(hit.id);
         else if (v instanceof JSet) push(badges, hit.id, `∈ ${name}`);
@@ -1102,13 +1185,21 @@ const Runner = (() => {
         if (QUEUE_VAR.test(name)) queued.add(hit.id);
       });
     };
-    if (running && top && !top.isMain) {
-      for (const [k, v] of it.frameVars(top)) {
-        if (v instanceof JVertex) push(pointers, v.id, k);
-        else if (v instanceof JEdge) { const key = session.edgeOf.get(v); if (key) edgeMarks.add(key); }
-        else if ((typeof v === 'number' || typeof v === 'string') && VERTEX_VAR.test(k)) { const hit = vertexFor(v); if (hit) push(pointers, hit.id, k); }
-        else collection(k, v);
-      }
+    for (const [k, v] of vars) {
+      if (v instanceof JVertex) push(pointers, v.id, k);
+      else if (v instanceof JEdge) { const key = session.edgeOf.get(v); if (key) edgeMarks.add(key); }
+      else if ((typeof v === 'number' || typeof v === 'string') && (VERTEX_VAR.test(k) || (session.matrix && INDEX_VAR.test(k)))) {
+        const hit = vertexFor(v, k);
+        if (hit) push(pointers, hit.id, k);
+      } else collection(k, v);
+    }
+    // Matriz: la casilla [actual][j] que se está mirando, si tiene arista.
+    if (session.matrix && cur) {
+      const curName = MATRIX_CURRENT.find(k => byName.has(k) && vertexFor(byName.get(k), k) === cur);
+      const otherName = MATRIX_OTHER.find(k => k !== curName && byName.has(k) && vertexFor(byName.get(k), k));
+      const other = otherName ? vertexFor(byName.get(otherName), otherName) : null;
+      const key = other && other !== cur ? session.edgeKey(cur.id, other.id) : null;
+      if (key) edgeMarks.add(key);
     }
     // Al terminar: si devolvió vértices en orden (un recorrido), se numeran; si devolvió un mapa, se muestra.
     let order = null;
@@ -1117,8 +1208,12 @@ const Runner = (() => {
       for (const [k, x] of res.map) { const hit = vertexFor(k); if (hit) push(badges, hit.id, `↩ ${badgeValue(x)}`); }
     } else if (res instanceof JList || Array.isArray(res)) {
       const items = res instanceof JList ? res.items : res;
-      const hits = items.map(vertexFor);
+      const hits = items.map(x => vertexFor(x));
       if (items.length && hits.every(Boolean) && new Set(hits).size === hits.length) order = new Map(hits.map((h, i) => [h.id, i + 1]));
+      // Matriz: un array con un número por vértice (por ejemplo, las distancias de Dijkstra).
+      else if (session.matrix && Array.isArray(res) && res.length === n && res.every(x => typeof x === 'number')) {
+        res.forEach((x, i) => push(badges, vertexAt(i).id, `↩ ${badgeValue(x)}`));
+      }
     }
     const floating = new Set(g.nodes.filter(v => !g.main.has(v.id)).map(v => v.id));
     return {
